@@ -27,9 +27,9 @@ struct WindowedKeyValueCache : KeyValueCache {
   }
 
  private:
-  void SlideLayer(size_t layer_idx);
-  void SlideAllLayers();
-  void SlideLayers(std::span<const size_t> layer_indices);
+  void SlideLayer(size_t layer_idx, int current_length);
+  void SlideAllLayers(int current_length);
+  void SlideLayers(std::span<const size_t> layer_indices, int current_length);
 
   DeviceInterface& Device() { return *model_.p_device_kvcache_; }
   Ort::Allocator& Allocator() { return model_.p_device_kvcache_->GetAllocator(); }
@@ -51,6 +51,8 @@ struct WindowedKeyValueCache : KeyValueCache {
   std::vector<std::string> input_name_strings_, output_name_strings_;
 
   bool is_first_update_{true};
+
+  std::vector<int32_t> layer_idx_to_sequence_lengths_{layer_count_, 0};
 };
 
 }  // namespace Generators

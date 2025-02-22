@@ -84,7 +84,7 @@ void WindowedKeyValueCache::Add() {
   }
 }
 
-void WindowedKeyValueCache::SlideLayer(size_t layer_idx) {
+void WindowedKeyValueCache::SlideLayer(size_t layer_idx, int current_length) {
   assert(layer_idx < layer_count_);
 
   uint8_t* key_cache_in_data = key_caches_in_[layer_idx]->GetTensorMutableData<uint8_t>();
@@ -93,10 +93,10 @@ void WindowedKeyValueCache::SlideLayer(size_t layer_idx) {
   int64_t num_key_cache_chunks = key_cache_shape_in_[0] * key_cache_shape_in_[2];
   for (int64_t j = 0; j < num_key_cache_chunks; ++j) {
     {
-      cpu_span<uint8_t> key_cache_dst(key_cache_in_data + j * key_cache_shape_in_[3],
-                                      key_cache_shape_in_[3] - window_size_);
-      cpu_span<uint8_t> key_cache_src(key_cache_in_data + j * key_cache_shape_in_[3] + window_size_,
-                                      key_cache_shape_in_[3] - window_size_);
+      cpu_span<uint8_t> key_cache_dst(key_cache_in_data + ((j + 1) * key_cache_shape_in_[3]) - current_length - window_size_,
+                                      current_length);
+      cpu_span<uint8_t> key_cache_src(key_cache_in_data + ((j + 1) * key_cache_shape_in_[3]) - current_length,
+                                      current_length);
       std::copy(key_cache_src.begin(), key_cache_src.end(), key_cache_dst.begin());
     }
     {
@@ -112,48 +112,52 @@ void WindowedKeyValueCache::SlideLayer(size_t layer_idx) {
   uint8_t* value_cache_out_data = value_caches_out_[layer_idx]->GetTensorMutableData<uint8_t>();
 
   for (int64_t j = 0; j < value_cache_shape_in_[0]; ++j) {
-    {
-      cpu_span<uint8_t> value_cache_dst(value_cache_in_data + (j * value_cache_shape_in_[2] * value_cache_shape_in_[3]),
-                                        (value_cache_shape_in_[2] - window_size_) * value_cache_shape_in_[3]);
-      cpu_span<uint8_t> value_cache_src(value_cache_in_data + (j * value_cache_shape_in_[2] * value_cache_shape_in_[3]) +
-                                            (window_size_ * value_cache_shape_in_[3]),
-                                        (value_cache_shape_in_[2] - window_size_) * value_cache_shape_in_[3]);
+    // std::cout << "j: " << j << std::endl;
+    for (int64_t k = value_cache_shape_in_[2] - current_length; k < value_cache_shape_in_[2]; ++k) {
+      cpu_span<uint8_t> value_cache_dst(value_cache_in_data + (j * value_cache_shape_in_[2] * value_cache_shape_in_[3]) + ((k - window_size_) * value_cache_shape_in_[3]),
+                                        value_cache_shape_in_[3]);
+      cpu_span<uint8_t> value_cache_src(value_cache_in_data + (j * value_cache_shape_in_[2] * value_cache_shape_in_[3]) + (k * value_cache_shape_in_[3]),
+                                        value_cache_shape_in_[3]);
       std::copy(value_cache_src.begin(), value_cache_src.end(), value_cache_dst.begin());
     }
-    {
-      cpu_span<uint8_t> value_cache_dst(value_cache_in_data + (j * value_cache_shape_in_[2] * value_cache_shape_in_[3]) +
-                                            ((value_cache_shape_in_[2] - window_size_) * value_cache_shape_in_[3]),
-                                        window_size_ * value_cache_shape_in_[3]);
-      cpu_span<uint8_t> value_cache_src(value_cache_out_data + (j * value_cache_shape_out_[2] * value_cache_shape_out_[3]),
-                                        window_size_ * value_cache_shape_out_[3]);
-      std::copy(value_cache_src.begin(), value_cache_src.end(), value_cache_dst.begin());
+    // std::cout << "j after first: " << j << std::endl;
+    for (int64_t k = 0; k < window_size_; ++k) {
+      {
+        cpu_span<uint8_t> value_cache_dst(value_cache_in_data + (j * value_cache_shape_in_[2] * value_cache_shape_in_[3]) + ((value_cache_shape_in_[2] - window_size_ + k) * value_cache_shape_in_[3]),
+                                          value_cache_shape_in_[3]);
+        cpu_span<uint8_t> value_cache_src(value_cache_out_data + (j * value_cache_shape_out_[2] * value_cache_shape_out_[3]) + (k * value_cache_shape_out_[3]),
+                                          value_cache_shape_out_[3]);
+        std::copy(value_cache_src.begin(), value_cache_src.end(), value_cache_dst.begin());
+      }
     }
   }
 }
 
-void WindowedKeyValueCache::SlideAllLayers() {
+void WindowedKeyValueCache::SlideAllLayers(int current_length) {
   ThreadPool thread_pool{static_cast<size_t>(layer_count_)};
-  thread_pool.Compute([this](size_t layer_idx) {
-    SlideLayer(layer_idx);
+  thread_pool.Compute([this, current_length](size_t layer_idx) {
+    SlideLayer(layer_idx, current_length);
   });
 }
 
-void WindowedKeyValueCache::SlideLayers(std::span<const size_t> layer_indices) {
+void WindowedKeyValueCache::SlideLayers(std::span<const size_t> layer_indices, int current_length) {
   ThreadPool thread_pool{layer_indices.size()};
   thread_pool.Compute([&](size_t idx) {
     const size_t layer_idx = layer_indices[idx];
-    SlideLayer(layer_idx);
+    SlideLayer(layer_idx, current_length);
   });
 }
 
 void WindowedKeyValueCache::Update(DeviceSpan<int32_t> /* beam_indices */, int current_length) {
+  // std::cout << std::endl
+  //           << "Current length " << current_length << std::endl;
   if (is_first_update_) {
     num_windows_ = (current_length + window_size_ - 1) / window_size_;
     is_first_update_ = false;
     window_index_++;
     return;
   } else if (window_size_ == 1 || window_index_ < num_windows_) {
-    SlideAllLayers();
+    SlideAllLayers(current_length);
     window_index_++;
     return;
   }
@@ -258,10 +262,12 @@ void WindowedKeyValueCache::Update(DeviceSpan<int32_t> /* beam_indices */, int c
   }
 }
 
-void WindowedKeyValueCache::PartialTokenGenerationUpdate(DeviceSpan<int32_t> /* beam_indices */, int /* total_length */,
+void WindowedKeyValueCache::PartialTokenGenerationUpdate(DeviceSpan<int32_t> /* beam_indices */, int total_length,
                                                          std::span<const size_t> layer_indices_to_update) {
   assert(window_size_ == 1);
-  SlideLayers(layer_indices_to_update);
+  // std::cout << std::endl
+  //           << "Current length " << total_length << std::endl;
+  SlideLayers(layer_indices_to_update, total_length);
 }
 
 }  // namespace Generators
