@@ -291,6 +291,12 @@ class Model:
 
         # Quantization-specific variables (INT4, INT8, etc.)
         self.quant_attrs = {
+            "int2": {
+                "accuracy_level": int(extra_options.get("int2_accuracy_level", 0)),   # Default is 0 for non-QDQ formats, default is 4 for QDQ formats
+                "block_size": int(extra_options.get("int2_block_size", 32)),
+                "is_symmetric": extra_options.get("int2_is_symmetric", True),
+                "op_types_to_quantize": extra_options.get("int2_op_types_to_quantize", ("MatMul", )),
+            },
             "int4": {
                 "accuracy_level": int(extra_options.get("int4_accuracy_level", 0)),   # Default is 0 for non-QDQ formats, default is 4 for QDQ formats
                 "block_size": int(extra_options.get("int4_block_size", 32)),
@@ -437,6 +443,8 @@ class Model:
         # Quantize ONNX model to desired precision
         # TODO: Replace by quantizing the MatMuls as they are created
         already_quantized_in_qdq_format = self.quant_type is not None and self.quant_attrs["use_qdq"]  # Skip quantizing `MatMul` in `DequantizeLinear --> Transpose --> MatMul` path
+        if self.onnx_dtype == "int2" and not already_quantized_in_qdq_format:
+            model = self.to_int2(model)
         if self.onnx_dtype == "int4" and not already_quantized_in_qdq_format:
             model = self.to_int4(model)
 
@@ -460,9 +468,24 @@ class Model:
             convert_attribute=False,
         )
 
+    def to_int2(self, model):
+        quant = MatMul4BitsQuantizer(
+            model=model,
+            bits=2,
+            block_size=self.quant_attrs["int2"]["block_size"],
+            is_symmetric=self.quant_attrs["int2"]["is_symmetric"],
+            accuracy_level=self.quant_attrs["int2"]["accuracy_level"],
+            nodes_to_exclude=[],
+            quant_format=QuantFormat.QDQ if self.quant_attrs["use_qdq"] else QuantFormat.QOperator,
+            op_types_to_quantize=self.quant_attrs["int2"]["op_types_to_quantize"],
+        )
+        quant.process()
+        return quant.model.model
+
     def to_int4(self, model):
         quant = MatMul4BitsQuantizer(
             model=model,
+            bits=4,
             block_size=self.quant_attrs["int4"]["block_size"],
             is_symmetric=self.quant_attrs["int4"]["is_symmetric"],
             accuracy_level=self.quant_attrs["int4"]["accuracy_level"],
@@ -495,6 +518,12 @@ class Model:
         if unpack_int4 and self.onnx_dtype == 'int4':
             tensor.data_type = TensorProto.UINT4
             tensor.dims[-1] *= 2
+
+        # unpack_int2?
+        if unpack_int4 and self.onnx_dtype == 'int2':
+            # TODO: no need to depend on the onnx_dtype
+            tensor.data_type = TensorProto.UINT4
+            tensor.dims[-1] *= 4
 
         self.initializers.append(tensor)
 
@@ -724,6 +753,11 @@ class Model:
     def make_matmul_op(self, matmul, basename, root_input, **kwargs):
         if self.onnx_dtype in {"fp16", "fp32"}:
             return self.make_matmul_fp16_or_fp32(matmul, basename, root_input, **kwargs)
+        elif self.onnx_dtype == "int2":
+            if self.quant_attrs["use_qdq"]:
+                return self.make_matmul_int2_qdq(matmul, basename, root_input, **kwargs)
+            else:
+                return self.make_matmul_int2(matmul, basename, root_input, **kwargs)
         elif self.onnx_dtype == "int4":
             if self.quant_attrs["use_qdq"]:
                 return self.make_matmul_int4_qdq(matmul, basename, root_input, **kwargs)
@@ -780,6 +814,43 @@ class Model:
 
         return name
 
+    def make_matmul_int2(self, matmul, basename, root_input, **kwargs):
+        if not hasattr(matmul, "qweight"):
+            # TODO: quantize weights, then save new MatMul numpy weights for onnx model
+            # print(f"Quantizing to {self.onnx_dtype} on-the-fly is not currently supported.")
+            # print(f"Saving as {self.io_dtype} on-the-fly and quantizing to {self.onnx_dtype} at the end.")
+            return self.make_matmul_fp16_or_fp32(matmul, basename, root_input, **kwargs)
+
+        name = f"{basename}NBits"
+
+        # Input weights are quantized, save quantized MatMul numpy weights for onnx model
+        weight = name[1:].replace("/", ".") + ".qweight"
+        self.make_external_tensor(matmul.qweight.detach().numpy(), weight)
+        scales = name[1:].replace("/", ".") + ".scales"
+        self.make_external_tensor(matmul.scales.detach().numpy().astype(self.to_numpy_dtype[self.io_dtype]), scales)
+
+        inputs = [root_input, weight, scales]
+
+        if hasattr(matmul, "qzeros") and matmul.qzeros is not None:
+            zeros = name[1:].replace("/", ".") + ".qzeros"
+            self.make_external_tensor(matmul.qzeros.detach().numpy(), zeros)
+            inputs.append(zeros)
+
+        if hasattr(matmul, "g_idx") and matmul.g_idx is not None:
+            g_idx = name[1:].replace("/", ".") + ".g_idx"
+            self.make_external_tensor(matmul.g_idx.detach().numpy().astype(np.int32), g_idx)
+            inputs.append(g_idx)
+
+        output = "logits" if kwargs.get("logits", False) else f"{name}/output_0"
+        self.make_node(
+            "MatMulNBits", inputs=inputs, outputs=[output], name=name, domain="com.microsoft",
+            accuracy_level=self.quant_attrs["int2"]["accuracy_level"],
+            bits=matmul.bits, block_size=matmul.group_size, K=matmul.in_features, N=matmul.out_features,
+        )
+        self.make_value_info(output, self.io_dtype, shape=['batch_size', 'sequence_length', matmul.out_features])
+
+        return name
+
     def make_dequantize_linear(self, dequantize_name, quantized_op):
         # Input weights are quantized, save quantized MatMul numpy weights for onnx model
         qweight = dequantize_name[1:].replace("/", ".") + ".qweight"
@@ -808,6 +879,30 @@ class Model:
         return dequantize_output
 
     def make_matmul_int4_qdq(self, matmul, matmul_name, root_input, **kwargs):
+        if not hasattr(matmul, "qweight"):
+            # TODO: quantize weights, then save new MatMul numpy weights for onnx model
+            # print(f"Quantizing to {self.onnx_dtype} on-the-fly is not currently supported.")
+            # print(f"Saving as {self.io_dtype} on-the-fly and quantizing to {self.onnx_dtype} at the end.")
+            return self.make_matmul_fp16_or_fp32(matmul, matmul_name, root_input, **kwargs)
+
+        dequantize_output = self.make_dequantize_linear(f"{matmul_name}/DequantizeLinear", matmul)
+
+        # Add a transpose instead of transposing the weights offline. The reason for this is that it is more natural and usually more performant to
+        # compute quantized matmul when the weights are transposed. In most implementations, the transpose should usually be converted to a "transposeB"
+        # attribute on the MatMul itself. A more natural way to represent this would have been to use Gemm since it already supports a transB attribute,
+        # but unfortunately Gemm doesn't support batches.
+        qweight_shape = matmul.qweight.detach().numpy().shape
+        transposed_shape = [qweight_shape[1] * qweight_shape[2] * 2, qweight_shape[0]]
+        transpose_name = f"{matmul_name}/Transpose"
+        self.make_transpose(transpose_name, dequantize_output, self.io_dtype, transposed_shape, [1, 0])
+
+        matmul_output = "logits" if kwargs.get("logits", False) else f"{matmul_name}/output_0"
+        self.make_node("MatMul", inputs=[root_input, f"{transpose_name}/output_0"], outputs=[matmul_output], name=matmul_name)
+        self.make_value_info(matmul_output, self.io_dtype, shape=['batch_size', 'sequence_length', matmul.out_features])
+
+        return matmul_name
+
+    def make_matmul_int2_qdq(self, matmul, matmul_name, root_input, **kwargs):
         if not hasattr(matmul, "qweight"):
             # TODO: quantize weights, then save new MatMul numpy weights for onnx model
             # print(f"Quantizing to {self.onnx_dtype} on-the-fly is not currently supported.")
@@ -873,6 +968,8 @@ class Model:
     def make_packed_matmul(self, q_matmul, k_matmul, v_matmul, basename, root_input, **kwargs):
         if self.onnx_dtype in {"fp16", "fp32"}:
             return self.make_packed_matmul_fp16_or_fp32(q_matmul, k_matmul, v_matmul, basename, root_input, **kwargs)
+        elif self.onnx_dtype == "int2":
+            return self.make_packed_matmul_int2(q_matmul, k_matmul, v_matmul, basename, root_input, **kwargs)
         elif self.onnx_dtype == "int4":
             return self.make_packed_matmul_int4(q_matmul, k_matmul, v_matmul, basename, root_input, **kwargs)
         else:
@@ -894,6 +991,57 @@ class Model:
         new_name = self.make_matmul(matmul, name, root_input, **kwargs)
 
         return new_name
+
+    def make_packed_matmul_int2(self, q_matmul, k_matmul, v_matmul, basename, root_input, **kwargs):
+        if not hasattr(q_matmul, "qweight"):
+            # TODO: quantize weights, then save new MatMul numpy weights for onnx model
+            # print(f"Quantizing to {self.onnx_dtype} on-the-fly is not currently supported.")
+            # print(f"Saving as {self.io_dtype} on-the-fly and quantizing to {self.onnx_dtype} at the end.")
+            return self.make_packed_matmul_fp16_or_fp32(q_matmul, k_matmul, v_matmul, basename, root_input, **kwargs)
+
+        name = f"{basename}NBits"
+
+        # Create dummy PackedMatMul class
+        class PackedMatMul:
+            def __init__(self):
+                self.qweight = torch.concatenate([q_matmul.qweight.detach().cpu(), k_matmul.qweight.detach().cpu(), v_matmul.qweight.detach().cpu()], dim=0)
+                self.scales = torch.concatenate([q_matmul.scales.detach().cpu(), k_matmul.scales.detach().cpu(), v_matmul.scales.detach().cpu()], dim=0)
+                self.qzeros = torch.concatenate([q_matmul.qzeros.detach().cpu(), k_matmul.qzeros.detach().cpu(), v_matmul.qzeros.detach().cpu()], dim=0)
+                self.g_idx = q_matmul.g_idx
+
+                self.in_features = q_matmul.in_features
+                self.out_features = q_matmul.out_features + k_matmul.out_features + v_matmul.out_features
+                self.bits = q_matmul.bits
+                self.group_size = q_matmul.group_size
+        matmul = PackedMatMul()
+
+        # Input weights are quantized, save quantized MatMul numpy weights for onnx model
+        weight = name[1:].replace("/", ".") + ".qweight"
+        self.make_external_tensor(matmul.qweight.detach().numpy(), weight)
+        scales = name[1:].replace("/", ".") + ".scales"
+        self.make_external_tensor(matmul.scales.detach().numpy().astype(self.to_numpy_dtype[self.io_dtype]), scales)
+
+        inputs = [root_input, weight, scales]
+
+        if hasattr(matmul, "qzeros") and matmul.qzeros is not None:
+            zeros = name[1:].replace("/", ".") + ".qzeros"
+            self.make_external_tensor(matmul.qzeros.detach().numpy(), zeros)
+            inputs.append(zeros)
+
+        if hasattr(matmul, "g_idx") and matmul.g_idx is not None:
+            g_idx = name[1:].replace("/", ".") + ".g_idx"
+            self.make_external_tensor(matmul.g_idx.detach().numpy().astype(np.int32), g_idx)
+            inputs.append(g_idx)
+
+        output = "logits" if kwargs.get("logits", False) else f"{name}/output_0"
+        self.make_node(
+            "MatMulNBits", inputs=inputs, outputs=[output], name=name, domain="com.microsoft",
+            accuracy_level=self.quant_attrs["int4"]["accuracy_level"],
+            bits=matmul.bits, block_size=matmul.group_size, K=matmul.in_features, N=matmul.out_features,
+        )
+        self.make_value_info(output, self.io_dtype, shape=['batch_size', 'sequence_length', matmul.out_features])
+
+        return name
 
     def make_packed_matmul_int4(self, q_matmul, k_matmul, v_matmul, basename, root_input, **kwargs):
         if not hasattr(q_matmul, "qweight"):
@@ -3113,7 +3261,7 @@ def create_model(model_name, input_path, output_dir, precision, execution_provid
         config.update(peft_config.__dict__)
 
     # Set input/output precision of ONNX model
-    io_dtype = TensorProto.FLOAT if precision in {"int8", "fp32"} or (precision == "int4" and execution_provider == "cpu") else TensorProto.FLOAT16
+    io_dtype = TensorProto.FLOAT if precision in {"int8", "fp32"} or (precision in ("int2", "int4") and execution_provider == "cpu") else TensorProto.FLOAT16
 
     if "config_only" not in extra_options:
         # List architecture options in alphabetical order
@@ -3205,7 +3353,7 @@ def get_args():
         "-p",
         "--precision",
         required=True,
-        choices=["int4", "fp16", "fp32"],
+        choices=["int2", "int4", "fp16", "fp32"],
         help="Precision of model",
     )
 
