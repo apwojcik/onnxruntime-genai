@@ -2,16 +2,18 @@
 #include "softmax.h"
 #include "search.h"
 #include "beam_search_scorer.h"
+#include "cpu/interface.h"
 #include <queue>
 #include <algorithm>
 
 namespace Generators {
 
 Search_Cpu::Search_Cpu(const GeneratorParams& params)
-    : Search{params} {
+    : Search{params},
+      cpu_device_{*GetCpuInterface()} {
   auto batch_beam_size = params.BatchBeamSize();
 
-  sequence_lengths_ = params.p_device->Allocate<int32_t>(batch_beam_size);
+  sequence_lengths_ = cpu_device_.Allocate<int32_t>(batch_beam_size);
 }
 
 GreedySearch_Cpu::GreedySearch_Cpu(const GeneratorParams& params)
@@ -26,9 +28,9 @@ GreedySearch_Cpu::GreedySearch_Cpu(const GeneratorParams& params)
     gen_.seed(seq);
   }
 
-  next_tokens_ptr_ = params.p_device->Allocate<int32_t>(params.search.batch_size);
+  next_tokens_ptr_ = cpu_device_.Allocate<int32_t>(params.search.batch_size);
+  next_tokens_ptr_.Zero();
   next_tokens_ = cpu_span<int32_t>(next_tokens_ptr_.Span());
-  memset(next_tokens_.data(), 0, next_tokens_.size_bytes());
 
   eos_seen_buffer_ = AllocateArray<bool>(params.search.batch_size, &eos_seen_);
   memset(eos_seen_.data(), 0, eos_seen_.size_bytes());
@@ -161,8 +163,11 @@ void GreedySearch_Cpu::SampleTopK(int k, float temperature) {
     std::vector<int> indices(scores.size());
     std::iota(indices.begin(), indices.end(), 0);
     std::partial_sort(indices.begin(), indices.begin() + k, indices.end(), [scores = scores.data()](int i, int j) { return scores[i] > scores[j]; });
+    std::vector<float> top_k_scores(k);
+    for (int i = 0; i < k; i++)
+      top_k_scores[i] = scores[indices[i]];
     // Sample a token from the top K
-    std::discrete_distribution<> dis(scores.begin(), scores.begin() + k);
+    std::discrete_distribution<> dis(top_k_scores.begin(), top_k_scores.end());
     SetNextToken(batch_id, indices[dis(gen_)]);
   }
   AppendNextTokensToSequences();
@@ -368,7 +373,6 @@ DeviceSpan<int32_t> BeamSearch_Cpu::GetSequence(size_t index) {
   return beam_scorer_->GetBeamHypotheses(batch_id, beam_id);
 }
 
-// TODO(aciddelgado): my question is, should this return copy or reference? A: A copy, as with DeviceSpan it's like a span
 DeviceSpan<int32_t> BeamSearch_Cpu::GetSequence(size_t batch_id, size_t beam_id) {
   Finalize(params_->search.num_return_sequences);
   return beam_scorer_->GetBeamHypotheses(batch_id, beam_id);

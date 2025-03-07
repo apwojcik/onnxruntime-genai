@@ -1,12 +1,18 @@
-#include <gtest/gtest.h>
-#include <generators.h>
-#include <search.h>
-#include <models/model.h>
+// Copyright (c) Microsoft Corporation. All rights reserved.
+// Licensed under the MIT License.
+
+#include <cstring>  // for memcmp
+#include <numeric>
 #include <iostream>
-#include <ort_genai.h>
-#include "../src/span.h"
 #include <thread>
 #include <vector>
+#include "span.h"
+
+#define OGA_USE_SPAN 1
+#include "models/onnxruntime_api.h"
+#include "ort_genai.h"
+
+#include <gtest/gtest.h>
 
 #ifndef MODEL_PATH
 #define MODEL_PATH "../../test/test_models/"
@@ -14,6 +20,8 @@
 #ifndef PHI2_PATH
 #if USE_CUDA
 #define PHI2_PATH MODEL_PATH "phi-2/int4/cuda"
+#elif USE_DML
+#define PHI2_PATH MODEL_PATH "phi-2/int4/dml"
 #else
 #define PHI2_PATH MODEL_PATH "phi-2/int4/cpu"
 #endif
@@ -128,8 +136,43 @@ TEST(CAPITests, AppendTokensToSequence) {
 #endif
 }
 
+TEST(CAPITests, MaxLength) {
+  // Batch size 1 case
+  std::vector<int32_t> input_ids_0{1, 2, 3, 5, 8};
+  std::vector<int32_t> input_ids_1{13, 21, 34, 55, 89};
+
+  int max_length = 7;
+
+  // To generate this file:
+  // python convert_generation.py --model_type gpt2 -m hf-internal-testing/tiny-random-gpt2 --output tiny_gpt2_greedysearch_fp16.onnx --use_gpu --max_length 20
+  // And copy the resulting gpt2_init_past_fp32.onnx file into these two files (as it's the same for gpt2)
+
+  auto model = OgaModel::Create(MODEL_PATH "hf-internal-testing/tiny-random-gpt2-fp32");
+
+  auto params = OgaGeneratorParams::Create(*model);
+  params->SetSearchOption("max_length", max_length);
+
+  auto generator = OgaGenerator::Create(*model, *params);
+  generator->AppendTokens(input_ids_0.data(), input_ids_0.size());
+  EXPECT_THROW(generator->AppendTokens(input_ids_1.data(), input_ids_1.size()), std::runtime_error);
+
+#if !USE_DML
+  // Batch size 3 case
+  std::vector<int32_t> input_ids_2{1, 2, 3, 5, 8, 13, 21, 34, 55, 89,
+                                   0, 0, 0, 52, 104, 52, 53, 54, 55, 56,
+                                   0, 0, 195, 731, 731, 195, 64, 45, 23, 12};
+  params = OgaGeneratorParams::Create(*model);
+  params->SetSearchOption("max_length", max_length);
+  params->SetSearchOption("batch_size", 3);
+
+  generator = OgaGenerator::Create(*model, *params);
+  EXPECT_THROW(generator->AppendTokens(input_ids_2.data(), input_ids_2.size()), std::runtime_error);
+#endif
+}
+
+// DML doesn't support batch_size > 1
 TEST(CAPITests, EndToEndPhiBatch) {
-#if TEST_PHI2
+#if TEST_PHI2 && !USE_DML
   auto model = OgaModel::Create(PHI2_PATH);
   auto tokenizer = OgaTokenizer::Create(*model);
 
@@ -159,6 +202,65 @@ TEST(CAPITests, EndToEndPhiBatch) {
     auto out_string = tokenizer->Decode(generator->GetSequenceData(i), generator->GetSequenceCount(i));
     std::cout << "Decoded string:" << out_string << std::endl;
   }
+
+  // Verify outputs match expected outputs
+  std::vector<int32_t> expected_output{
+      1212, 318, 257, 1332, 13, 50256, 50256, 50256, 50256, 50256, 198, 50280, 2, 16926, 1330, 1635, 10412, 6617, 278, 6335, 32994, 21857, 13849, 38665, 82, 21815, 1108, 9557, 40755, 27446, 2417, 6381, 6, 7131, 6, 14870, 31314, 21411, 46009, 3974,
+      49, 1381, 389, 7427, 17252, 0, 50256, 50256, 50256, 50256, 198, 50284, 37811, 628, 50256, 50256, 50256, 50256, 50256, 50256, 50256, 50256, 50256, 50256, 50256, 50256, 50256, 50256, 50256, 50256, 50256, 50256, 50256, 50256, 50256, 50256, 50256, 50256, 50256, 50256,
+      464, 2068, 7586, 21831, 18045, 625, 262, 16931, 3290, 13, 198, 50284, 37811, 628, 50256, 50256, 50256, 50256, 50256, 50256, 50256, 50256, 50256, 50256, 50256, 50256, 50256, 50256, 50256, 50256, 50256, 50256, 50256, 50256, 50256, 50256, 50256, 50256, 50256, 50256};
+  
+  for (size_t i = 0; i < 3; i++) {
+    const auto sequence_length = generator->GetSequenceCount(i);
+    const auto* sequence_data = generator->GetSequenceData(i);
+
+    ASSERT_LE(sequence_length, 40);
+
+    const auto* expected_output_start = &expected_output[i * 40];
+    EXPECT_TRUE(0 == std::memcmp(expected_output_start, sequence_data, sequence_length * sizeof(int32_t)));
+  }
+#endif
+}
+
+TEST(CAPITests, EndToEndPhi) {
+#if TEST_PHI2
+  auto model = OgaModel::Create(PHI2_PATH);
+  auto tokenizer = OgaTokenizer::Create(*model);
+
+  const char* input_strings[] = {
+      "This is a test."
+  };
+
+  auto input_sequences = OgaSequences::Create();
+  for (auto& string : input_strings)
+    tokenizer->Encode(string, *input_sequences);
+
+  auto params = OgaGeneratorParams::Create(*model);
+  params->SetSearchOption("max_length", 40);
+
+  auto generator = OgaGenerator::Create(*model, *params);
+  generator->AppendTokenSequences(*input_sequences);
+
+  while (!generator->IsDone()) {
+    generator->GenerateNextToken();
+  }
+
+  // Decode The Batch
+  auto out_string = tokenizer->Decode(generator->GetSequenceData(0), generator->GetSequenceCount(0));
+  std::cout << "Decoded string:" << out_string << std::endl;
+
+  // Verify outputs match expected outputs
+  std::vector<int32_t> expected_output{
+      1212, 318, 257, 1332, 13, 198, 50280, 2, 16926, 1330, 1635, 10412, 6617, 278, 
+      6335, 32994, 21857, 13849, 38665, 82, 21815, 1108, 9557, 40755, 27446, 2417, 
+      6381, 6, 7131, 6, 14870, 31314, 21411, 46009, 3974, 82, 1039, 889, 263, 3684};
+
+  const auto sequence_length = generator->GetSequenceCount(0);
+  const auto* sequence_data = generator->GetSequenceData(0);
+
+  ASSERT_LE(sequence_length, 40);
+
+  const auto* expected_output_start = &expected_output[0];
+  EXPECT_TRUE(0 == std::memcmp(expected_output_start, sequence_data, sequence_length * sizeof(int32_t)));
 #endif
 }
 
@@ -286,6 +388,84 @@ TEST(CAPITests, GetOutputCAPI) {
   }
 }
 
+TEST(CAPITests, GetLogitsCAPI) {
+  std::vector<int64_t> input_ids_shape{2, 4};
+  std::vector<int32_t> input_ids{0, 0, 0, 52, 0, 0, 195, 731};
+
+  int batch_size = static_cast<int>(input_ids_shape[0]);
+  int max_length = 10;
+
+  auto model = OgaModel::Create(MODEL_PATH "hf-internal-testing/tiny-random-gpt2-fp32");
+
+  auto params = OgaGeneratorParams::Create(*model);
+  params->SetSearchOption("max_length", max_length);
+  params->SetSearchOption("batch_size", batch_size);
+
+  auto generator = OgaGenerator::Create(*model, *params);
+  generator->AppendTokens(input_ids.data(), input_ids.size());
+
+  // check prompt generation, GetLogits() returns last token logits
+  // full logits has shape [2, 1, 1000]. Sample 1 for every 200 tokens and the expected sampled logits has shape [2, 1, 5]
+  std::vector<float> expected_sampled_logits_prompt{-0.12675379f, -0.04443946f, 0.14492269f, 0.03021223f, -0.03212897f,
+                                                    0.2938929f, -0.10538938f, -0.00226692f, 0.12050669f, -0.10622668f};
+
+  auto prompt_logits_ptr = generator->GetLogits();
+  auto prompt_logits = reinterpret_cast<float*>(prompt_logits_ptr->Data());
+  int num_prompt_outputs_to_check = 10;
+  int sample_size = 200;
+  float tolerance = 0.001f;
+  // Verify outputs match expected outputs
+  for (int i = 0; i < num_prompt_outputs_to_check; i++) {
+    EXPECT_NEAR(expected_sampled_logits_prompt[i], prompt_logits[i * sample_size], tolerance);
+  }
+
+  generator->GenerateNextToken();
+  // check for the 1st token generation
+  // full logits has shape [2, 1, 1000]. Sample 1 for every 200 tokens and the expected sampled logits has shape [2, 1, 5]
+  std::vector<float> expected_sampled_logits_token_gen{0.03742531f, -0.05752287f, 0.14159015f, 0.04210977f, -0.1484456f,
+                                                       0.3041716f, -0.08701379f, -0.03778192f, 0.07471392f, -0.02049096f};
+
+  auto token_gen_logits_ptr = generator->GetLogits();
+  auto token_gen_logits = reinterpret_cast<float*>(token_gen_logits_ptr->Data());
+  int num_token_gen_outputs_to_check = 10;
+
+  for (int i = 0; i < num_token_gen_outputs_to_check; i++) {
+    EXPECT_NEAR(expected_sampled_logits_token_gen[i], token_gen_logits[i * sample_size], tolerance);
+  }
+}
+
+TEST(CAPITests, SetLogitsCAPI) {
+  std::vector<int64_t> input_ids_shape{2, 4};
+  std::vector<int32_t> input_ids{0, 0, 0, 52, 0, 0, 195, 731};
+
+  int batch_size = static_cast<int>(input_ids_shape[0]);
+  int max_length = 10;
+
+  auto model = OgaModel::Create(MODEL_PATH "hf-internal-testing/tiny-random-gpt2-fp32");
+
+  auto params = OgaGeneratorParams::Create(*model);
+  params->SetSearchOption("max_length", max_length);
+  params->SetSearchOption("batch_size", batch_size);
+
+  auto generator = OgaGenerator::Create(*model, *params);
+  generator->AppendTokens(input_ids.data(), input_ids.size());
+
+  std::vector<float> expected_sampled_logits_prompt{0.29694548f, 0.00955007f, 0.0430819f, 0.10063869f, 0.0437237f};
+  std::vector<float> dummy_logits(2 * 1000, 0.0f);
+  for (int i = 0; i < dummy_logits.size(); i++) {
+    dummy_logits[i] = expected_sampled_logits_prompt[i % expected_sampled_logits_prompt.size()];
+  }
+  std::vector<int64_t> dummy_logits_shape{2, 1, 1000};
+  auto logits = OgaTensor::Create(dummy_logits.data(), dummy_logits_shape.data(), dummy_logits_shape.size(), OgaElementType_float32);
+  auto raw_logits = generator->GetLogits();
+  generator->SetLogits(*logits);
+  auto retrieved_logits = generator->GetLogits();
+  auto retrieved_data = reinterpret_cast<float*>(retrieved_logits->Data());
+  for (int i = 0; i < dummy_logits.size(); i++) {
+    EXPECT_EQ(dummy_logits[i], retrieved_data[i]);
+  }
+}
+
 TEST(CAPITests, SetTerminate) {
 #if TEST_PHI2
 
@@ -333,7 +513,8 @@ TEST(CAPITests, SetTerminate) {
 #endif
 }
 
-#if TEST_PHI2
+// DML Doesn't support batch_size > 1
+#if TEST_PHI2 && !USE_DML
 
 struct Phi2Test {
   Phi2Test() {
@@ -411,12 +592,14 @@ TEST(CAPITests, TopKTopPCAPI) {
   test.Run();
 }
 
-#endif  // TEST_PHI2
+#endif  // TEST_PHI2 && !USE_DML
 
 #if TEST_PHI2
 TEST(CAPITests, AdaptersTest) {
 #ifdef USE_CUDA
   using OutputType = Ort::Float16_t;
+#elif defined(USE_DML)
+  using OutputType = Ort::Float16_t; 
 #else
   using OutputType = float;
 #endif
@@ -665,5 +848,3 @@ TEST(CAPITests, RewindGptFp32CAPI) {
   expected_output_start = &expected_output[0];
   EXPECT_TRUE(0 == std::memcmp(expected_output_start, sequence_data, sequence_length * sizeof(int32_t)));
 }
-
-
