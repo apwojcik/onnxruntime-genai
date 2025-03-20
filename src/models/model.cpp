@@ -503,6 +503,8 @@ std::shared_ptr<Model> CreateModel(OrtEnv& ort_env, const char* config_path) {
     return std::make_shared<MultiModalVisionModel>(std::move(config), ort_env);
   if (config->model.type == "decoder-pipeline")
     return std::make_shared<DecoderOnlyPipelineModel>(std::move(config), ort_env);
+  if (config->model.type == "encode-decoder")
+    return std::make_shared<EncoderDecoderModel>(std::move(config), ort_env);
 
   throw std::runtime_error("Unsupported model_type in config.json: " + config->model.type);
 }
