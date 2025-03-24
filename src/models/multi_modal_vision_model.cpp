@@ -113,7 +113,7 @@ RoamingArray<float> VisionEncoderState::Run(int current_length, RoamingArray<int
   return MakeDummy();
 }
 
-DecoderState::DecoderState(const MultiModalVisionModel& model, RoamingArray<int32_t> sequence_lengths, const GeneratorParams& params, const CapturedGraphInfo* captured_graph_info)
+MMDecoderState::MMDecoderState(const MultiModalVisionModel& model, RoamingArray<int32_t> sequence_lengths, const GeneratorParams& params, const CapturedGraphInfo* captured_graph_info)
     : State{params, model},
       model_{model},
       captured_graph_info_{captured_graph_info},
@@ -124,13 +124,13 @@ DecoderState::DecoderState(const MultiModalVisionModel& model, RoamingArray<int3
   kv_cache_.Add();
 }
 
-RoamingArray<float> DecoderState::Run(int current_length, RoamingArray<int32_t> next_tokens, RoamingArray<int32_t> next_indices) {
+RoamingArray<float> MMDecoderState::Run(int current_length, RoamingArray<int32_t> next_tokens, RoamingArray<int32_t> next_indices) {
   int batch_size = static_cast<int>(inputs_embeds_.GetShape()[0]);
   State::Run(*model_.decoder_session_, *model_.run_options_, batch_size);
   return logits_.Get();
 }
 
-void DecoderState::UpdateInputsOutputs(int current_length, RoamingArray<int32_t> beam_indices) {
+void MMDecoderState::UpdateInputsOutputs(int current_length, RoamingArray<int32_t> beam_indices) {
   position_inputs_.Update(current_length);
   kv_cache_.Update(beam_indices.GetCPU(), current_length);
   logits_.Update();
@@ -145,7 +145,7 @@ MultiModalPipelineState::MultiModalPipelineState(const MultiModalVisionModel& mo
       captured_graph_info_{model.GetCapturedGraphPool()->ReserveCapturedGraph(model, params)} {
   embedding_state_ = std::make_unique<EmbeddingState>(model, params, nullptr, num_image_tokens_);
   vision_state_ = std::make_unique<VisionEncoderState>(model, params, num_image_tokens_);
-  decoder_state_ = std::make_unique<DecoderState>(model, sequence_lengths_unk, params, captured_graph_info_.get());
+  decoder_state_ = std::make_unique<MMDecoderState>(model, sequence_lengths_unk, params, captured_graph_info_.get());
 }
 
 RoamingArray<float> MultiModalPipelineState::Run(int current_length, RoamingArray<int32_t> next_tokens,

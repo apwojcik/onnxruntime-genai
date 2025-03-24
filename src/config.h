@@ -15,6 +15,8 @@ struct Config {
     static constexpr std::string_view CacheIndirectionName = "cache_indirection";
     static constexpr std::string_view CurrentSequenceLengthName = "current_sequence_length";
     static constexpr std::string_view EncoderHiddenStatesName = "encoder_hidden_states";
+    static constexpr std::string_view EncoderAttentionMaskName = "encoder_attention_mask";
+    static constexpr std::string_view EncoderInputIds = "encoder_input_ids";
     static constexpr std::string_view ImageFeaturesName = "image_features";
     static constexpr std::string_view ImageSizesName = "image_sizes";
     static constexpr std::string_view InputIdsName = "input_ids";
@@ -23,6 +25,8 @@ struct Config {
     static constexpr std::string_view PastSequenceLengthName = "past_sequence_length";
     static constexpr std::string_view PixelValuesName = "pixel_values";
     static constexpr std::string_view PositionIdsName = "position_ids";
+    static constexpr std::string_view RnnPrevStates = "rnn_states_prev";
+    static constexpr std::string_view RnnStates = "rnn_states";
   };
 
   fs::path config_path;  // Path of the config directory
@@ -79,6 +83,8 @@ struct Config {
         std::string attention_mask{Defaults::AttentionMaskName};
         std::string position_ids{Defaults::PositionIdsName};
         std::string audio_features{Defaults::AudioFeaturesName};
+        std::string encoder_attention_mask{Defaults::EncoderAttentionMaskName};
+        std::string encoder_input_ids{Defaults::EncoderInputIds};
       } inputs;
 
       struct Outputs {
@@ -134,6 +140,7 @@ struct Config {
         std::string current_sequence_length{Defaults::CurrentSequenceLengthName};
         std::string past_sequence_length{Defaults::PastSequenceLengthName};
         std::string cache_indirection{Defaults::CacheIndirectionName};
+        std::string encoder_attention_mask{Defaults::EncoderAttentionMaskName};
       } inputs;
 
       struct Outputs {
@@ -141,6 +148,7 @@ struct Config {
         std::string present_key_names{"present.%d.key"}, present_value_names{"present.%d.value"};
         std::string present_names;  // When key/value pairs are combined
         std::string output_cross_qk_names{"output_cross_qk_%d"};
+        std::string rnn_states{Defaults::RnnStates};
       } outputs;
 
       struct PipelineModel {

@@ -72,11 +72,11 @@ struct VisionEncoderState : State {
                                 num_image_tokens_};
 };
 
-struct DecoderState : State {
-  DecoderState(const MultiModalVisionModel& model, RoamingArray<int32_t> sequence_lengths,
+struct MMDecoderState : State {
+  MMDecoderState(const MultiModalVisionModel& model, RoamingArray<int32_t> sequence_lengths,
                const GeneratorParams& params, const CapturedGraphInfo* captured_graph_info);
-  DecoderState(const DecoderState&) = delete;
-  DecoderState& operator=(const DecoderState&) = delete;
+  MMDecoderState(const MMDecoderState&) = delete;
+  MMDecoderState& operator=(const MMDecoderState&) = delete;
 
   RoamingArray<float> Run(int current_length, RoamingArray<int32_t> next_tokens,
                           RoamingArray<int32_t> next_indices) override;
@@ -117,7 +117,7 @@ struct MultiModalPipelineState : State {
   const CapturedGraphInfoPtr captured_graph_info_;
   std::unique_ptr<EmbeddingState> embedding_state_;
   std::unique_ptr<VisionEncoderState> vision_state_;
-  std::unique_ptr<DecoderState> decoder_state_;
+  std::unique_ptr<MMDecoderState> decoder_state_;
   bool is_prompt_{true};
 };
 
