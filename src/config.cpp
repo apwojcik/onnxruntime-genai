@@ -126,6 +126,10 @@ struct EncoderInputs_Element : JSON::Element {
       v_.embeddings = value;
     } else if (name == "attention_mask") {
       v_.attention_mask = value;
+    } else if (name == "encoder_attention_mask") {
+      v_.encoder_attention_mask = value;
+    } else if (name == "encoder_input_ids") {
+      v_.encoder_input_ids = value;
     } else if (name == "position_ids") {
       v_.position_ids = value;
     } else if (name == "audio_features") {
@@ -167,6 +171,8 @@ struct DecoderInputs_Element : JSON::Element {
       v_.past_sequence_length = value;
     } else if (name == "cache_indirection") {
       v_.cache_indirection = value;
+    } else if (name == "encoder_attention_mask") {
+      v_.encoder_attention_mask = value;
     } else {
       throw JSON::unknown_value_error{};
     }

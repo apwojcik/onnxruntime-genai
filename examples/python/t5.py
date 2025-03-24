@@ -11,45 +11,45 @@ import onnxruntime_genai as og
 
 # og.set_log_options(enabled=True, model_input_values=True, model_output_values=True)
 
-def _find_dir_contains_sub_dir(current_dir: Path, target_dir_name):
-    curr_path = Path(current_dir).absolute()
-    target_dir = glob.glob(target_dir_name, root_dir=curr_path)
-    if target_dir:
-        return Path(curr_path / target_dir[0]).absolute()
-    else:
-        if curr_path.parent == curr_path:
-            # Root dir
-            return None
-        return _find_dir_contains_sub_dir(curr_path / '..', target_dir_name)
+# def _find_dir_contains_sub_dir(current_dir: Path, target_dir_name):
+#     curr_path = Path(current_dir).absolute()
+#     target_dir = glob.glob(target_dir_name, root_dir=curr_path)
+#     if target_dir:
+#         return Path(curr_path / target_dir[0]).absolute()
+#     else:
+#         if curr_path.parent == curr_path:
+#             # Root dir
+#             return None
+#         return _find_dir_contains_sub_dir(curr_path / '..', target_dir_name)
 
 
-def _complete(text, state):
-    return (glob.glob(text + "*") + [None])[state]
+# def _complete(text, state):
+#     return (glob.glob(text + "*") + [None])[state]
 
 
-def get_paths(modality, user_provided_paths, default_paths, interactive):
-    paths = None
+# def get_paths(modality, user_provided_paths, default_paths, interactive):
+#     paths = None
 
-    if interactive:
-        try:
-            import readline
-            readline.set_completer_delims(" \t\n;")
-            readline.parse_and_bind("tab: complete")
-            readline.set_completer(_complete)
-        except ImportError:
-            # Not available on some platforms. Ignore it.
-            pass
-        paths = [
-            path.strip()
-            for path in input(
-                f"{modality.capitalize()} Path (comma separated; leave empty if no {modality}): "
-            ).split(",")
-        ]
-    else:
-        paths = user_provided_paths if user_provided_paths else default_paths
+#     if interactive:
+#         try:
+#             import readline
+#             readline.set_completer_delims(" \t\n;")
+#             readline.parse_and_bind("tab: complete")
+#             readline.set_completer(_complete)
+#         except ImportError:
+#             # Not available on some platforms. Ignore it.
+#             pass
+#         paths = [
+#             path.strip()
+#             for path in input(
+#                 f"{modality.capitalize()} Path (comma separated; leave empty if no {modality}): "
+#             ).split(",")
+#         ]
+#     else:
+#         paths = user_provided_paths if user_provided_paths else default_paths
 
-    paths = [path for path in paths if path]
-    return paths
+#     paths = [path for path in paths if path]
+#     return paths
 
 
 def run(args: argparse.Namespace):
