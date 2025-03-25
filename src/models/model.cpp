@@ -148,10 +148,12 @@ const std::string& TokenizerStream::Decode(int32_t token) {
 }
 
 Tokenizer::Tokenizer(Config& config) : pad_token_id_{config.model.pad_token_id} {
+  std::cout<<"Inside create tokenizer"<<std::endl;
   CheckResult(OrtxCreateTokenizer(tokenizer_.Address(), config.config_path.string().c_str()));
 }
 
 std::unique_ptr<TokenizerStream> Tokenizer::CreateStream() const {
+  std::cout<<"Inside create tokenizer stream"<<std::endl;
   return std::make_unique<TokenizerStream>(*this);
 }
 
@@ -484,6 +486,9 @@ OrtSessionOptions* Model::GetSessionOptions(const std::string& model_id) const {
 }
 
 std::shared_ptr<Tokenizer> Model::CreateTokenizer() const {
+  std::cout << "Creating tokenizer" << std::endl;
+  std::cout << "Tokenizer config path: " << config_->config_path.string() << std::endl;
+  std::cout << "Tokenizer model type: " << config_->model.type << std::endl;
   return std::make_shared<Tokenizer>(*config_);
 }
 
@@ -493,6 +498,8 @@ std::shared_ptr<MultiModalProcessor> Model::CreateMultiModalProcessor() const {
 
 std::shared_ptr<Model> CreateModel(OrtEnv& ort_env, const char* config_path) {
   auto config = std::make_unique<Config>(fs::path(config_path));
+  std::cout<<"Config Path: "<<config_path<<std::endl;
+  std::cout<<"Model Type: "<<config->model.type<<std::endl;
 
   if (config->model.type == "gpt2")
     return std::make_shared<Gpt_Model>(std::move(config), ort_env);

@@ -24,6 +24,8 @@ def run(args: argparse.Namespace):
     processor = model.create_multimodal_processor()
     tokenizer = og.Tokenizer(model)
 
+    print("Tkeninzer = ",tokenizer)
+
     while True:
         readline.set_completer_delims(" \t\n;")
         readline.parse_and_bind("tab: complete")

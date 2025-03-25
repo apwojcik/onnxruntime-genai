@@ -14,14 +14,18 @@ namespace Generators {
 
 EncoderDecoderModel::EncoderDecoderModel(std::unique_ptr<Config> config, OrtEnv& ort_env)
     : Model{std::move(config)} {
+  
+  std::cout<<"Creating EncoderDecoderModel"<<std::endl;
   session_encoder_ = OrtSession::Create(ort_env, (config_->config_path / fs::path(config_->model.encoder.filename)).c_str(), session_options_.get());
   session_decoder_ = OrtSession::Create(ort_env, (config_->config_path / fs::path(config_->model.decoder.filename)).c_str(), session_options_.get());
-
+  
+  std::cout<<"Creating EncoderDecoderModel - InitDeviceAllocator"<<std::endl;
   InitDeviceAllocator(*session_decoder_);
   session_info_->Add(*session_encoder_);
 }
 
 std::unique_ptr<State> EncoderDecoderModel::CreateState(RoamingArray<int32_t> sequence_lengths, const GeneratorParams& params) const {
+  std::cout<<"Creating EncoderDecoderState"<<std::endl;
   return std::make_unique<EncoderDecoderState>(*this, params, sequence_lengths);
 }
 
@@ -29,6 +33,7 @@ EncoderState::EncoderState(const EncoderDecoderModel& model, RoamingArray<int32_
     : State{params, model},
       model_{model},
       position_inputs_{model, *this, sequence_lengths} {
+  std::cout<<"Creating EncoderState"<<std::endl;
   input_ids_.Add();
   position_inputs_.Add();                           // adds attention_mask
 }
@@ -97,10 +102,14 @@ void DecoderState::UpdateInputsOutputs(const RoamingArray<int32_t>& next_tokens_
 EncoderDecoderState::EncoderDecoderState(const EncoderDecoderModel& model, const GeneratorParams& params, RoamingArray<int32_t> sequence_lengths_unk)
     : State{params, model},
       model_{model} {
+  std::cout<<"Creating EncoderDecoderState"<<std::endl;
   encoder_state_ = std::make_unique<EncoderState>(model, sequence_lengths_unk, params);
+  std::cout<<"EncoderState"<<encoder_state_.get()<<std::endl;
   cross_cache_ = std::make_unique<Cross_Cache>(*this, 64);
+  std::cout<<"Creating EncoderDecoderState - encoder_state_ created"<<std::endl;
   encoder_state_->AddCrossCache(cross_cache_);
   decoder_state_ = std::make_unique<DecoderState>(model, sequence_lengths_unk, params);
+  std::cout<<"Creating EncoderDecoderState - decoder_state_ created"<<decoder_state_.get()<<std::endl;
   decoder_state_->AddCrossCache(cross_cache_);
 
   transpose_k_cache_buffer_ = OrtValue::CreateTensor(*model_.allocator_device_, cross_cache_->GetShape(), cross_cache_->GetType());

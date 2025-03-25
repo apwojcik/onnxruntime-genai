@@ -6,6 +6,7 @@ import os
 import glob
 import time
 from pathlib import Path
+from transformers import AutoTokenizer
 
 import onnxruntime_genai as og
 
@@ -57,15 +58,14 @@ def run(args: argparse.Namespace):
     model = og.Model(args.model_path)
     print("Model loaded")
 
-    # processor = model.create_multimodal_processor()
-    # tokenizer_stream = processor.create_stream()
     tokenizer = og.Tokenizer(model)
+    # print("Tokenizer = ", tokenizer)
     tokenizer_stream = tokenizer.create_stream()
 
     interactive = not args.non_interactive
 
     while True:
-        prompt = "<|user|>\n"
+        # prompt = "<|user|>\n"
 
         if interactive:
             text = input("Prompt: ")
@@ -74,16 +74,20 @@ def run(args: argparse.Namespace):
                 text = args.prompt
             else:
                 text = "Does the audio summarize what is shown in the image? If not, what is different?"
-        prompt += f"{text}<|end|>\n<|assistant|>\n"
+        # prompt += f"{text}<|end|>\n<|assistant|>\n"
         
         print("Processing inputs...")
-        inputs = tokenizer.encode(prompt)
-        print("Processor complete.")
+
+        inputs = tokenizer.encode_batch(text)
+        print("inputs = ", type(inputs))
 
         print("Generating response...")
         params = og.GeneratorParams(model)
+        print("Setting inputs")
         params.set_inputs(inputs)
+        print("Input set")
         params.set_search_options(max_length=7680)
+        print("Set search options")
 
         generator = og.Generator(model, params)
         start_time = time.time()
@@ -92,6 +96,7 @@ def run(args: argparse.Namespace):
             generator.generate_next_token()
 
             new_token = generator.get_next_tokens()[0]
+            print("New token = ", new_token)
             print(tokenizer_stream.decode(new_token), end="", flush=True)
 
         print()
@@ -113,18 +118,18 @@ if __name__ == "__main__":
     parser.add_argument(
         "-m", "--model_path", type=str, required=True, help="Path to the folder containing the model"
     )
-    parser.add_argument(
-        "-e", "--execution_provider", type=str, required=True, choices=["cpu", "cuda", "dml"], help="Execution provider to run model"
-    )
-    parser.add_argument(
-        "--image_paths", nargs='*', type=str, required=False, help="Path to the images, mainly for CI usage"
-    )
-    parser.add_argument(
-        "--audio_paths", nargs='*', type=str, required=False, help="Path to the audios, mainly for CI usage"
-    )
-    parser.add_argument(
-        '-pr', '--prompt', required=False, help='Input prompts to generate tokens from, mainly for CI usage'
-    )
+    # parser.add_argument(
+    #     "-e", "--execution_provider", type=str, required=True, choices=["cpu", "cuda", "dml"], help="Execution provider to run model"
+    # )
+    # parser.add_argument(
+    #     "--image_paths", nargs='*', type=str, required=False, help="Path to the images, mainly for CI usage"
+    # )
+    # parser.add_argument(
+    #     "--audio_paths", nargs='*', type=str, required=False, help="Path to the audios, mainly for CI usage"
+    # )
+    # parser.add_argument(
+    #     '-pr', '--prompt', required=False, help='Input prompts to generate tokens from, mainly for CI usage'
+    # )
     parser.add_argument(
         '--non-interactive', action=argparse.BooleanOptionalAction, required=False, help='Non-interactive mode, mainly for CI usage'
     )
