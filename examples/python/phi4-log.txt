@@ -1,0 +1,23 @@
+Input: Creating tensor
+Inside of DecoderOnly_State constructor
+Nmae of InputIDs = input_ids
+Shape of InputIDs = 3 1
+Input index of InputIDs = 0
+Value of InputIDs = 0
+Inside of AppendTokens
+Before next tokens
+Before AllocateInputIdsOnDevice = 
+After AllocateInputIdsOnDevice
+After AppendTokens
+Before ComputeLogits 
+Inside of DecoderOnly_State::Run
+Batch size = 3
+Inside of DefaultInputIDs::Update = 0
+New tokens size = 1
+Number of beams = 3
+Batch size beam search = 1
+Inside of DefaultInputIDs::Update beam search = 1
+New tokens size beam search  = 1
+Shapes match
+Input tokens =  <class 'onnxruntime_genai.onnxruntime_genai.Tensor'>
+Input tokens =  <onnxruntime_genai.onnxruntime_genai.Tensor object at 0x7d2ad973c3f0>
