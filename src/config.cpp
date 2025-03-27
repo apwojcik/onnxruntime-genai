@@ -145,22 +145,25 @@ struct SessionOptions_Element : JSON::Element {
   NamedStrings_Element config_entries_{v_.config_entries};
 };
 
-struct EncoderDecoderInit_Element : JSON::Element {
-  explicit EncoderDecoderInit_Element(Config::Model::EncoderDecoderInit& v) : v_{v} {}
+struct EncoderDecoderInitInputs_Element : JSON::Element {
+  explicit EncoderDecoderInitInputs_Element(Config::Model::EncoderDecoderInit::Inputs& v) : v_{v} {}
 
   void OnValue(std::string_view name, JSON::Value value) override {
-    if (name == "filename") {
-      v_.filename = JSON::Get<std::string_view>(value);
-    } else
+    if (name == "encoder_input_ids") {
+      v_.input_features = JSON::Get<std::string_view>(value);
+    } else if (name == "encoder_attention_mask") {
+      v_.encoder_attention_mask = JSON::Get<std::string_view>(value);
+    } else {
       throw JSON::unknown_value_error{};
+    }
   }
 
  private:
-  Config::Model::EncoderDecoderInit& v_;
+  Config::Model::EncoderDecoderInit::Inputs& v_;
 };
 
-struct Inputs_Element : JSON::Element {
-  explicit Inputs_Element(Config::Model::Decoder::Inputs& v) : v_{v} {}
+struct DecoderInputs_Element : JSON::Element {
+  explicit DecoderInputs_Element(Config::Model::Decoder::Inputs& v) : v_{v} {}
 
   void OnValue(std::string_view name, JSON::Value value) override {
     if (name == "input_ids") {
@@ -177,6 +180,8 @@ struct Inputs_Element : JSON::Element {
       v_.past_value_names = JSON::Get<std::string_view>(value);
     } else if (name == "past_names") {
       v_.past_names = JSON::Get<std::string_view>(value);
+    } else if (name == "encoder_attention_mask") {
+      v_.encoder_attention_mask = JSON::Get<std::string_view>(value);
     } else if (name == "cross_past_key_names") {
       v_.cross_past_key_names = JSON::Get<std::string_view>(value);
     } else if (name == "cross_past_value_names") {
@@ -195,8 +200,27 @@ struct Inputs_Element : JSON::Element {
   Config::Model::Decoder::Inputs& v_;
 };
 
-struct Outputs_Element : JSON::Element {
-  explicit Outputs_Element(Config::Model::Decoder::Outputs& v) : v_{v} {}
+struct EncoderDecoderInitOutputs_Element : JSON::Element {
+  explicit EncoderDecoderInitOutputs_Element(Config::Model::EncoderDecoderInit::Outputs& v) : v_{v} {}
+
+  void OnValue(std::string_view name, JSON::Value value) override {
+    if (name == "encoder_hidden_states") {
+      v_.hidden_states = JSON::Get<std::string_view>(value);
+    } else if (name == "cross_present_key_names") {
+      v_.cross_present_key_names = JSON::Get<std::string_view>(value);
+    } else if (name == "cross_present_value_names") {
+      v_.cross_present_value_names = JSON::Get<std::string_view>(value);
+    } else {
+      throw JSON::unknown_value_error{};
+    }
+  }
+
+ private:
+  Config::Model::EncoderDecoderInit::Outputs& v_;
+};
+
+struct DecoderOutputs_Element : JSON::Element {
+  explicit DecoderOutputs_Element(Config::Model::Decoder::Outputs& v) : v_{v} {}
 
   void OnValue(std::string_view name, JSON::Value value) override {
     if (name == "logits") {
@@ -331,6 +355,44 @@ struct SlidingWindow_Element : JSON::Element {
   std::optional<Config::Model::Decoder::SlidingWindow>& v_;
 };
 
+struct EncoderDecoderInit_Element : JSON::Element {
+  explicit EncoderDecoderInit_Element(Config::Model::EncoderDecoderInit& v) : v_{v} {}
+
+  void OnValue(std::string_view name, JSON::Value value) override {
+    if (name == "filename") {
+      v_.filename = JSON::Get<std::string_view>(value);
+    } else if (name == "hidden_size") {
+      v_.hidden_size = static_cast<int>(JSON::Get<double>(value));
+    } else if (name == "num_attention_heads") {
+      v_.num_attention_heads = static_cast<int>(JSON::Get<double>(value));
+    } else if (name == "num_hidden_layers") {
+      v_.num_hidden_layers = static_cast<int>(JSON::Get<double>(value));
+    } else if (name == "head_size") {
+      v_.head_size = static_cast<int>(JSON::Get<double>(value));
+    } else
+      throw JSON::unknown_value_error{};
+  }
+
+  Element& OnObject(std::string_view name) override {
+    if (name == "session_options") {
+      return session_options_;
+    }
+    if (name == "inputs") {
+      return inputs_;
+    }
+    if (name == "outputs") {
+      return outputs_;
+    }
+    throw JSON::unknown_value_error{};
+  }
+
+ private:
+  Config::Model::EncoderDecoderInit& v_;
+  SessionOptions_Element session_options_{v_.session_options};
+  EncoderDecoderInitInputs_Element inputs_{v_.inputs};
+  EncoderDecoderInitOutputs_Element outputs_{v_.outputs};
+};
+
 struct Decoder_Element : JSON::Element {
   explicit Decoder_Element(Config::Model::Decoder& v) : v_{v} {}
 
@@ -377,8 +439,8 @@ struct Decoder_Element : JSON::Element {
  private:
   Config::Model::Decoder& v_;
   SessionOptions_Element session_options_{v_.session_options};
-  Inputs_Element inputs_{v_.inputs};
-  Outputs_Element outputs_{v_.outputs};
+  DecoderInputs_Element inputs_{v_.inputs};
+  DecoderOutputs_Element outputs_{v_.outputs};
   Pipeline_Element pipeline_{v_.pipeline};
   SlidingWindow_Element sliding_window_{v_.sliding_window};
 };
