@@ -49,15 +49,20 @@ Overview:
 - Once a new request is received from the client, it is added to the `request_queue`.
 - The engine loop checks for unfinished requests in its internal pool. If there are unfinished requests, `Step` will generate the next round of tokens for requests it can serve.
 - Requests that cannot be served (due to memory limitations) will continue sitting in the queue until the requests being currently served have finished. The key-value cache for finished requests can be moved to CPU while the unfinished ones can be moved into the device memory.
-- At this point, the client can either remove the request from the engine or continue decoding the request by passing in a new request with the same Id.
+- At this point, the client can either remove the request from the engine or continue decoding the request by adding tokens to an existing request.
 
 ## Components
 
-- Engine
-    - Scheduler
-        - PagedKeyValueCache
-            - CacheManager
-- PagedAttention
+- Rewire Onnx Runtime GenAI infrastructure to handle new components:
+    - Engine, Scheduler, PagedKeyValueCache, CacheManager, Request, SequenceGroup
+- PagedAttention custom operator (Cuda)
+- ONNX Runtime GenAI C/C++/C#/Python API
+- Prepare model inputs (serialized)
+- Process model outputs (logits)
+- Search/Sampling
+- Tokenize/Detokenize input/output internally and bundle the output into the request
+- Prepare model with updated op and input/output structure
+
 
 ## PagedAttention
 
