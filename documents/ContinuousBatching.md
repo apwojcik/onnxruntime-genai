@@ -5,34 +5,38 @@ Example:
 ```cpp
 #include "ort_genai.h"
 
-std::queue<std::unique_ptr<OgaRequest>> request_queue;
-int64_t request_id = GenerateUniqueRequestId();
-request_queue.push(OgaRequest::Create(request_id, "What is 2 + 3?", OgaGeneratorParams::Create(...)))
+std::queue<std::string> request_queue;
+request_queue.push("What is 2 + 3?");
+
+std::list<std::unique_ptr<OgaRequest>> request_pool;
 
 auto config = OgaConfig::Create(config_path);
 auto engine = OgaEngine::Create(*config);
 
 while (!request_queue.empty()) {
-    engine.AddRequest(std::move(request_queue.front()));
+    request_pool.push_back(OgaRequest::Create(
+        request_queue.front().prompt(), OgaGeneratorParams::Create(...)));
+    engine.AddRequest(request_pool.back());
     request_queue.pop();
 }
 
-while (!engine.HasUnfinishedRequests()) {
-    auto request_outputs = engine.Step();
+while (engine.HasPendingRequests()) {
+    engine.Step();
 
-    for (auto& request_output : request_outputs) {
+    for (auto request_it = request_pool.begin(); request_it != request_pool.end();) {
+        if (request->HasAvailableTokens()) {
+            auto tokens = request->Tokens();
+            auto text = request->Text();
 
-        if (request_output.HasTokensToProcess()) {
-            auto tokens = request_output.Tokens();
-            auto text = request_output.Text();
-
-            std::cout << "Request Id: " << request_output.RequestId() << std::endl;
-            std::cout << "\tNew token: " << " " << tokens.back() << std::endl;
-            std::cout << "\tGenerated text so far: " << text << std::endl;
+            std::cout << "New token: " << " " << tokens.back() << std::endl;
+            std::cout << "Generated text so far: " << text << std::endl;
         }
 
-        if (request_output.Finished()) {
-            engine.RemoveRequest(request_output.RequestId());
+        if (request->Done()) {
+            request->Remove();
+            request_pool.erase(request_it++);
+        } else {
+            request_it++;
         }
     }
 }
