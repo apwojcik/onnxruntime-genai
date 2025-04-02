@@ -30,8 +30,6 @@ while (engine.HasPendingRequests()) {
             for (auto token : tokens) {
                 std::cout << "New token: " << " " << token << std::endl;
             }
-            
-            std::cout << "Generated text so far: " << text << std::endl;
 
             if (request->Done()) {
                 request->Remove();
