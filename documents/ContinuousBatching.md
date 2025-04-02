@@ -23,21 +23,25 @@ while (!request_queue.empty()) {
 while (engine.HasPendingRequests()) {
     engine.Step();
 
-    for (auto request_it = request_pool.begin(); request_it != request_pool.end();) {
-        if (request->HasAvailableTokens()) {
-            auto tokens = request->Tokens();
-            auto text = request->Text();
+    std::vector<std::list<std::unique_ptr<OgaRequest>>::iterator> requests_to_remove;
 
-            std::cout << "New token: " << " " << tokens.back() << std::endl;
+    for (auto request_it = request_pool.begin(); request_it != request_pool.end(); ++request_it) {
+        if (auto tokens = request.GetNewTokens()) {
+            for (auto token : tokens) {
+                std::cout << "New token: " << " " << token << std::endl;
+            }
+            
             std::cout << "Generated text so far: " << text << std::endl;
-        }
 
-        if (request->Done()) {
-            request->Remove();
-            request_pool.erase(request_it++);
-        } else {
-            request_it++;
-        }
+            if (request->Done()) {
+                request->Remove();
+                requests_to_remove.push_back(request_it);
+            }
+        }    
+    }
+
+    for (auto& it : requests_to_remove) {
+        request_pool.erase(it);
     }
 }
 ```
