@@ -12,10 +12,11 @@ std::list<std::unique_ptr<OgaRequest>> request_pool;
 
 auto config = OgaConfig::Create(config_path);
 auto engine = OgaEngine::Create(*config);
+auto tokenizer = OgaTokenizer::Create(*engine);
 
 while (!request_queue.empty()) {
     request_pool.push_back(OgaRequest::Create(
-        request_queue.front().prompt(), OgaGeneratorParams::Create(...)));
+        tokenizer->Encode(request_queue.front().prompt()), OgaGeneratorParams::Create(...)));
     engine.AddRequest(request_pool.back());
     request_queue.pop();
 }
@@ -26,9 +27,10 @@ while (engine.HasPendingRequests()) {
     std::vector<std::list<std::unique_ptr<OgaRequest>>::iterator> requests_to_remove;
 
     for (auto request_it = request_pool.begin(); request_it != request_pool.end(); ++request_it) {
-        if (auto tokens = request.GetNewTokens()) {
+        if (auto tokens = request.GetNewTokens(); !tokens.empty()) {
             for (auto token : tokens) {
-                std::cout << "New token: " << " " << token << std::endl;
+                std::cout << "New token: " << token << std::endl;
+                std::cout << "Streaming text: " << request->TokenizerStream->Decode(token) << std::endl;
             }
 
             if (request->Done()) {
@@ -53,10 +55,10 @@ Overview:
 
 ## Components
 
-- Rewire Onnx Runtime GenAI infrastructure to handle new components:
+- Rewire Onnx Runtime GenAI infrastructure to handle new components: [Baiju]
     - Engine, Scheduler, PagedKeyValueCache, CacheManager, Request, SequenceGroup
-- PagedAttention custom operator (Cuda)
-- ONNX Runtime GenAI C/C++/C#/Python API
+- PagedAttention custom operator (Cuda) [Alejandro]
+- ONNX Runtime GenAI C/C++/C#/Python API [Ryan]
 - Prepare model inputs (serialized)
 - Process model outputs (logits)
 - Search/Sampling
