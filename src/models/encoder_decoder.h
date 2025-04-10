@@ -33,12 +33,18 @@ struct EncoderDecoderState : State {
   DefaultPositionInputs encoder_attention_mask_;
 
   // DefaultInputIDs input_ids_{*this};
-  std::unique_ptr<OrtValue> decoder_input_ids_, expanded_decoder_input_ids_;
+  // std::unique_ptr<OrtValue> decoder_input_ids_, expanded_decoder_input_ids_;
   Logits logits_{*this};
   DefaultKeyValueCache kv_cache_{*this};
 
   const EncoderDecoderModel& model_;
 
   std::unique_ptr<CrossCache> cross_cache_;
+  size_t decoder_input_ids_index_{~0U};
+
+
+  // std::array<int64_t, 2> decoder_input_ids_shape_{};  // {params.batch_size*params.beam_size, params.sequence_length}
+  // std::unique_ptr<Tensor> decoder_input_ids_;
+  // std::unique_ptr<Tensor> decoder_input_ids_next_;  // Replaces attention_mask_ after each run
 };
 }  // namespace Generators

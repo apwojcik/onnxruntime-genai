@@ -233,7 +233,7 @@ void DefaultKeyValueCache::Update(DeviceSpan<int32_t> beam_indices, int total_le
     return;
 
   if (!is_first_update_) {
-    // std::cout<<"Inside of DefaultKeyValueCache::Update"<<std::endl;
+    std::cout<<"Inside of DefaultKeyValueCache::Update"<<std::endl;
     for (int i = 0; i < layer_count_ * 2; i++) {
       if (beam_indices.empty()) {
         pasts_[i] = std::move(presents_[i]);
@@ -243,7 +243,8 @@ void DefaultKeyValueCache::Update(DeviceSpan<int32_t> beam_indices, int total_le
       state_.inputs_[input_index_ + i] = pasts_[i].get();
     }
   }
-  // std::cout<<"Total length = "<<total_length<<std::endl;
+  std::cout<<"Total length = "<<total_length<<std::endl;
+  // total_length = 1;
 
   shape_[2] = total_length;
   for (int i = 0; i < layer_count_ * 2; i++) {
@@ -252,6 +253,7 @@ void DefaultKeyValueCache::Update(DeviceSpan<int32_t> beam_indices, int total_le
   }
 
   is_first_update_ = false;
+  std::cout<<"Done with kv update"<<std::endl;
 }
 
 void DefaultKeyValueCache::RewindTo(size_t index) {

@@ -9,7 +9,7 @@ from pathlib import Path
 
 import onnxruntime_genai as og
 
-# og.set_log_options(enabled=True, model_input_values=True, model_output_values=True)
+og.set_log_options(enabled=True, model_input_values=True, model_output_values=True)
 
 def _find_dir_contains_sub_dir(current_dir: Path, target_dir_name):
     curr_path = Path(current_dir).absolute()
@@ -134,6 +134,7 @@ def run(args: argparse.Namespace):
 
             new_token = generator.get_next_tokens()[0]
             print(tokenizer_stream.decode(new_token), end="", flush=True)
+            time.sleep(10)
 
         print()
         total_run_time = time.time() - start_time

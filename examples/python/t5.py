@@ -35,7 +35,7 @@ def main(args):
     params = og.GeneratorParams(model)
 
     search_options = {name:getattr(args, name) for name in ['do_sample', 'max_length', 'min_length', 'top_p', 'top_k', 'temperature', 'repetition_penalty'] if name in args} 
-    search_options['batch_size'] = len(prompts)
+    # search_options['batch_size'] = len(prompts)
     search_options['num_beams'] = 4
 
     if (args.verbose): print(f'Args: {args}')
@@ -49,19 +49,22 @@ def main(args):
     if args.verbose: print("Generator created")
 
     print("input tokens = ", input_tokens)
-    
     generator.append_tokens(input_tokens)
     if args.verbose: print("Input tokens added")
 
     if args.verbose: print("Generating tokens ...\n")
     start_time = time.time()
+    # generator.rewind_to(1)
     while not generator.is_done():
         generator.generate_next_token()
         new_token = generator.get_next_tokens()[0]
-        # if args.verbose: 
-        #     print(f"Token generated: {new_token}")
-        #     print(tokenizer_stream.decode(new_token), end='', flush=True)
-        # time.sleep(10)
+        # print("Len(new_token) = ", new_token)
+        # generator.rewind_to(generator.get_next_tokens())
+        if args.verbose: 
+            print(f"Token generated: {new_token}")
+            print(f"Token Sequence: {generator.get_sequence(0)}")
+            print(tokenizer_stream.decode(new_token), end='', flush=True)
+        # time.sleep(5)
     run_time = time.time() - start_time
 
     for i in range(len(prompts)):
@@ -80,7 +83,7 @@ if __name__ == "__main__":
     parser.add_argument('-m', '--model_path', type=str, required=True, help='Onnx model folder path (must contain genai_config.json and model.onnx)')
     parser.add_argument("-e", "--execution_provider", type=str, required=True, choices=["cpu", "cuda", "dml"], help="Provider to run model")
     parser.add_argument('-pr', '--prompts', nargs='*', required=False, help='Input prompts to generate tokens from. Provide this parameter multiple times to batch multiple prompts')
-    parser.add_argument('-i', '--min_length', type=int, default=25, help='Min number of tokens to generate including the prompt')
+    parser.add_argument('-i', '--min_length', type=int, default=1, help='Min number of tokens to generate including the prompt')
     parser.add_argument('-l', '--max_length', type=int, default=50, help='Max number of tokens to generate including the prompt')
     parser.add_argument('-ds', '--do_sample', action='store_true', help='Do random sampling. When false, greedy or beam search are used to generate the output. Defaults to false')
     parser.add_argument('--top_p', type=float, help='Top p probability to sample with')

@@ -251,6 +251,8 @@ void GeneratorParams::SetInputs(const NamedTensors& named_tensors) {
     throw std::runtime_error("Please use generator.AppendTokens for " + config.model.type + ". SetInputs is not supported for this model type.");
 
   for (const auto& [name, tensor] : named_tensors) {
+    // std::cout<<"SetInputs: " << name << std::endl;
+    // std::cout<<"Value = " << tensor->ort_tensor_->GetTensorMutableData<int32_t>() << std::endl;
     if (name == Config::Defaults::InputIdsName) {
       aux_input_ids = cpu_span<int32_t>(tensor->ort_tensor_->GetTensorMutableData<int32_t>(),
                                         tensor->ort_tensor_->GetTensorTypeAndShapeInfo()->GetElementCount());
@@ -310,6 +312,8 @@ DeviceSpan<int32_t> Generator::AllocateInputIdsOnDevice(cpu_span<const int32_t> 
     padded_input_ids_size = ((input_features.size() + window_size - 1) / window_size) * window_size;
   }
 
+  std::cout<<"Padded input ids size = "<<padded_input_ids_size<<std::endl;
+
   auto input_ids_device = state_->params_->p_device->Allocate<int32_t>(padded_input_ids_size);
   auto cpu_span = input_ids_device.CpuSpan();
   // std::cout<<"CPU Span size = "<<std::endl;
@@ -327,6 +331,8 @@ DeviceSpan<int32_t> Generator::AllocateInputIdsOnDevice(cpu_span<const int32_t> 
 
 // TODO(aciddelgado): Remove this function once SetInputs is moved to generator
 void Generator::AuxAppendTokens(cpu_span<const int32_t> input_features) {
+  // std::cout<<"Inside of AuxAppendTokens"<<std::endl;
+  // std::cout<<"Input tokens = "<<input_features[0]<<" "<<input_features[1]<<" "<<input_features[2]<<std::endl;
   ThrowErrorIfSessionTerminated(state_->session_terminated_);
   if (input_features.size() == 0)
     throw std::runtime_error("input_ids is empty");
@@ -364,22 +370,22 @@ void Generator::AppendTokens(cpu_span<const int32_t> input_features) {
     ComputeLogits(search_->GetNextTokens());
   }
 
-  // std::cout<<"Before AllocateInputIdsOnDevice = "<<std::endl;
+  std::cout<<"Before AllocateInputIdsOnDevice = "<<std::endl;
   auto input_ids_device = AllocateInputIdsOnDevice(input_features);
-  // std::cout<<"After AllocateInputIdsOnDevice"<<std::endl;
+  std::cout<<"After AllocateInputIdsOnDevice"<<std::endl;
   search_->AppendTokens(input_ids_device);
-  // std::cout<<"After AppendTokens"<<std::endl;
+  std::cout<<"After AppendTokens"<<std::endl;
   computed_logits_ = false;
-  // std::cout<<"Before ComputeLogits "<<std::endl;
+  std::cout<<"Before ComputeLogits "<<std::endl;
   ComputeLogits(input_ids_device);
-  // std::cout<<"After ComputeLogits"<<std::endl;
+  std::cout<<"After ComputeLogits"<<std::endl;
 }
 
 void Generator::ComputeLogits(DeviceSpan<int32_t> next_tokens) {
   if (computed_logits_)
     throw std::runtime_error("ComputeLogits called again without calling AppendTokens or GenerateNextToken first");
 
-  // std::cout<<"Inside of ComputeLogits = "<<search_->GetSequenceLength()<<std::endl;
+  std::cout<<"Inside of ComputeLogits = "<<search_->GetSequenceLength()<<std::endl;
 
   auto logits = state_->Run(search_->GetSequenceLength(), next_tokens, search_->GetNextIndices());
   // std::cout<<"After state_->Run "<<std::endl;
@@ -388,9 +394,9 @@ void Generator::ComputeLogits(DeviceSpan<int32_t> next_tokens) {
     DumpValues(stream, Ort::TypeToTensorType<float>, logits.CopyDeviceToCpu().data(), logits.size());
     stream << std::endl;
   }
-  // std::cout<<"Dump Stream"<<std::endl;
+  std::cout<<"Dump Stream"<<std::endl;
   SetLogits(logits);
-  // std::cout<<"SetLogits"<<std::endl;
+  std::cout<<"SetLogits"<<std::endl;
   last_action_ = Action::standard;
 
   computed_logits_ = true;
@@ -455,10 +461,11 @@ void Generator::GenerateNextToken() {
   }
 
   if (!computed_logits_) {
-    std::cout<<"Inside of GenerateNextToken"<<std::endl;
     auto next_tokens = search_->GetNextTokens();
+    std::cout<<"Inside of GenerateNextToken = "<<next_tokens.size()<<std::endl;
     if (last_action_ == Action::rewound)
       search_->AppendTokens(next_tokens);
+    std::cout<<"Computing Logits"<<std::endl;
     ComputeLogits(next_tokens);
   }
   computed_logits_ = false;
@@ -506,6 +513,8 @@ void Generator::RewindToLength(size_t new_length) {
   if (model_->config_->model.type == "whisper" || model_->config_->model.type == "phi3v" || model_->config_->model.type == "decoder-pipeline")
     throw std::runtime_error("RewindTo is currently not supported for " + model_->config_->model.type + ".");
   if (new_length > search_->GetSequenceLength())
+  std::cout<<"RwindToLength = "<<new_length<<std::endl;
+  std::cout<<"Current sequence length = "<<search_->GetSequenceLength()<<std::endl;
     throw std::runtime_error("Cannot rewind to a length greater than the current sequence length");
   if (new_length == search_->GetSequenceLength())
     return;

@@ -23,6 +23,10 @@ DecoderOnly_State::DecoderOnly_State(const DecoderOnly_Model& model, DeviceSpan<
   logits_.Add();
   kv_cache_.Add();
   extra_inputs_.Add();
+    auto& stream = Log("INITIALIZED model_input_values");
+    stream << std::endl;
+    DumpTensors(model_, stream, inputs_.data(), input_names_.data(), input_names_.size(), true);
+    std::cout<<"Updated input ids"<<std::endl;
 }
 
 DeviceSpan<float> DecoderOnly_State::Run(int total_length, DeviceSpan<int32_t>& next_tokens, DeviceSpan<int32_t> next_indices) {

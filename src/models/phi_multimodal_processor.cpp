@@ -40,6 +40,7 @@ ProcessImageAudioPrompt(const Generators::Tokenizer& tokenizer, const std::strin
 
   std::unique_ptr<OrtValue> audio_projection_mode_value = OrtValue::CreateTensor<int64_t>(allocator, std::vector<int64_t>({1}));
   if (num_images == 0 && num_audios == 0) {
+    std::cout<<"IT IS WORKING AS A LANGUAGE MODEL"<<std::endl;
     audio_projection_mode_value->GetTensorMutableData<int64_t>()[0] = 0;  // Language
   } else if (num_audios == 0) {
     audio_projection_mode_value->GetTensorMutableData<int64_t>()[0] = 1;  // Vision, language
@@ -151,6 +152,10 @@ std::unique_ptr<NamedTensors> PhiMultiModalProcessor::Process(const Tokenizer& t
   auto [input_ids, audio_projection_mode] = ProcessImageAudioPrompt(tokenizer, payload.prompt, num_img_tokens, audio_sizes, allocator);
   named_tensors->emplace(Config::Defaults::InputIdsName, std::make_shared<Tensor>(std::move(input_ids)));
   named_tensors->emplace(Config::Defaults::AudioProjectionModeName, std::make_shared<Tensor>(std::move(audio_projection_mode)));
+
+  for(auto it=named_tensors->begin(); it!=named_tensors->end(); ++it) {
+    std::cout<<"Named TEnsor = "<<it->first<<"Value = "<<it->second.get()<<std::endl;
+  }
 
   if (payload.images) {
     if (pixel_values_type_ == ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT) {

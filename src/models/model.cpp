@@ -49,7 +49,7 @@ void State::Run(OrtSession& session, bool graph_capture_this_run) {
     extra_outputs_.Add(session.GetOutputNames());
     first_run_ = false;
   } else {
-    // std::cout<<"Not the first run of the model, registering inputs and outputs."<<std::endl;
+    std::cout<<"Not the first run of the model, registering inputs and outputs."<<std::endl;
     extra_outputs_.Update();
   }
 
