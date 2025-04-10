@@ -45,11 +45,9 @@ void State::Run(OrtSession& session, bool graph_capture_this_run) {
   }
 
   if (first_run_) {
-    // std::cout<<"First run of the model, registering inputs and outputs."<<std::endl;
     extra_outputs_.Add(session.GetOutputNames());
     first_run_ = false;
   } else {
-    std::cout<<"Not the first run of the model, registering inputs and outputs."<<std::endl;
     extra_outputs_.Update();
   }
 
@@ -618,7 +616,6 @@ std::shared_ptr<Model> CreateModel(OrtEnv& ort_env, std::unique_ptr<Config> conf
   if (config->model.type == "gemma3")
     return std::make_shared<MultiModalLanguageModel>(std::move(config), ort_env, true, false);
   if (config->model.type == "t5")
-    // std::cout<<"Creating EncoderDecoderModel"<<std::endl;
     return std::make_shared<EncoderDecoderModel>(std::move(config), ort_env);
 
   throw std::runtime_error("Unsupported model_type in config.json: " + config->model.type);
@@ -666,7 +663,6 @@ std::unique_ptr<OrtValue> Model::ExpandInputs(std::unique_ptr<OrtValue>& input, 
 
   // When num_beams == 1, we don't need to expand the input, but the expand has a side effect of copying from
   // CPU memory to device memory, so we can skip if the p_device_inputs_ is the CPU device
-  // std::cout<<"inside expand INputs"<<std::endl;
   if (num_beams == 1 && p_device_inputs_ == GetDeviceInterface(DeviceType::CPU))
     return std::move(input);
 
@@ -674,8 +670,6 @@ std::unique_ptr<OrtValue> Model::ExpandInputs(std::unique_ptr<OrtValue>& input, 
   auto element_type = input_type_info->GetElementType();
   auto input_shape = input_type_info->GetShape();
   const int64_t batch_size = input_shape[0];
-  // std::cout<<"Batch size = "<<batch_size<<std::endl;
-  // std::cout<<"Num beams = "<<num_beams<<std::endl;
   const int64_t data_size_bytes = input_type_info->GetElementCount() * SizeOf(element_type) / batch_size;
 
   input_shape[0] *= num_beams;

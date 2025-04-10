@@ -251,8 +251,6 @@ void GeneratorParams::SetInputs(const NamedTensors& named_tensors) {
     throw std::runtime_error("Please use generator.AppendTokens for " + config.model.type + ". SetInputs is not supported for this model type.");
 
   for (const auto& [name, tensor] : named_tensors) {
-    // std::cout<<"SetInputs: " << name << std::endl;
-    // std::cout<<"Value = " << tensor->ort_tensor_->GetTensorMutableData<int32_t>() << std::endl;
     if (name == Config::Defaults::InputIdsName) {
       aux_input_ids = cpu_span<int32_t>(tensor->ort_tensor_->GetTensorMutableData<int32_t>(),
                                         tensor->ort_tensor_->GetTensorTypeAndShapeInfo()->GetElementCount());
@@ -270,14 +268,12 @@ void GeneratorParams::SetInputs(const NamedTensors& named_tensors) {
 }
 
 std::unique_ptr<Generator> CreateGenerator(const Model& model, const GeneratorParams& params) {
-  // std::cout<<"Inside of CreateGenerator"<<std::endl;
   return std::make_unique<Generator>(model, params);
 }
 
 std::unique_ptr<Search> CreateSearch(const GeneratorParams& params) {
   if (params.search.num_beams > 1)
     return params.p_device->CreateBeam(params);
-  // std::cout<<"Inside of CreateSearch"<<std::endl;
   return params.p_device->CreateGreedy(params);
 }
 
@@ -291,11 +287,8 @@ Generator::Generator(const Model& model, const GeneratorParams& params) : model_
   if (params.config.model.vocab_size < 1)
     throw std::runtime_error("vocab_size must be 1 or greater, is " + std::to_string(params.config.model.vocab_size));
 
-  // std::cout<<"Inside of Generator constructor"<<std::endl;
   search_ = CreateSearch(params);
-  // std::cout<<"After CreateSearch"<<std::endl;
   state_ = model.CreateState(search_->GetSequenceLengths(), params);  // Search sequence lengths set when creating state
-  // std::cout<<"After model.CreateState"<<std::endl;
 
   // Temporary solution for multimodal and whisper models
   if (!params.aux_input_ids.empty() && params.aux_input_ids.data() != nullptr) {
@@ -312,11 +305,9 @@ DeviceSpan<int32_t> Generator::AllocateInputIdsOnDevice(cpu_span<const int32_t> 
     padded_input_ids_size = ((input_features.size() + window_size - 1) / window_size) * window_size;
   }
 
-  std::cout<<"Padded input ids size = "<<padded_input_ids_size<<std::endl;
 
   auto input_ids_device = state_->params_->p_device->Allocate<int32_t>(padded_input_ids_size);
   auto cpu_span = input_ids_device.CpuSpan();
-  // std::cout<<"CPU Span size = "<<std::endl;
   auto padding_begin = cpu_span.begin();
   auto data_end = cpu_span.end();
   if (model_->config_->model.decoder.sliding_window.has_value() && model_->config_->model.decoder.sliding_window->alignment == "left") {
@@ -331,8 +322,6 @@ DeviceSpan<int32_t> Generator::AllocateInputIdsOnDevice(cpu_span<const int32_t> 
 
 // TODO(aciddelgado): Remove this function once SetInputs is moved to generator
 void Generator::AuxAppendTokens(cpu_span<const int32_t> input_features) {
-  // std::cout<<"Inside of AuxAppendTokens"<<std::endl;
-  // std::cout<<"Input tokens = "<<input_features[0]<<" "<<input_features[1]<<" "<<input_features[2]<<std::endl;
   ThrowErrorIfSessionTerminated(state_->session_terminated_);
   if (input_features.size() == 0)
     throw std::runtime_error("input_ids is empty");
@@ -347,7 +336,6 @@ void Generator::AuxAppendTokens(cpu_span<const int32_t> input_features) {
 
 void Generator::AppendTokens(cpu_span<const int32_t> input_features) {
   ThrowErrorIfSessionTerminated(state_->session_terminated_);
-  // std::cout<<"Input size = "<<input_features.size()<<std::endl;
   if (input_features.size() == 0)
     throw std::runtime_error("input_features is empty");
   if ((input_features.size() / state_->params_->search.batch_size) + search_->GetSequenceLength() > state_->params_->search.max_length)
@@ -357,7 +345,6 @@ void Generator::AppendTokens(cpu_span<const int32_t> input_features) {
   if (search_->GetSequenceLength() != 0 && state_->params_->search.batch_size > 1)
     throw std::runtime_error("AppendTokens can only be called once for batch_size > 1. To call AppendTokens again, use RewindToLength(0)");
 
-  // std::cout<<"Inside of AppendTokens"<<std::endl;
   constexpr std::array<DeviceType, 3> devices_supporting_continuous_decoding{DeviceType::CPU, DeviceType::CUDA, DeviceType::WEBGPU};
   if (search_->GetSequenceLength() != 0 &&
       std::none_of(devices_supporting_continuous_decoding.begin(), devices_supporting_continuous_decoding.end(),
@@ -365,38 +352,27 @@ void Generator::AppendTokens(cpu_span<const int32_t> input_features) {
     throw std::runtime_error("Continuous decoding is not supported on the selected device type (" + to_string(state_->params_->p_device->GetType()) +
                              "). Please recreate the generator instance to avoid using continuous decoding.");
 
-  // std::cout<<"Before next tokens"<<std::endl;
   if (last_action_ == Action::generated) {
     ComputeLogits(search_->GetNextTokens());
   }
 
-  std::cout<<"Before AllocateInputIdsOnDevice = "<<std::endl;
   auto input_ids_device = AllocateInputIdsOnDevice(input_features);
-  std::cout<<"After AllocateInputIdsOnDevice"<<std::endl;
   search_->AppendTokens(input_ids_device);
-  std::cout<<"After AppendTokens"<<std::endl;
   computed_logits_ = false;
-  std::cout<<"Before ComputeLogits "<<std::endl;
   ComputeLogits(input_ids_device);
-  std::cout<<"After ComputeLogits"<<std::endl;
 }
 
 void Generator::ComputeLogits(DeviceSpan<int32_t> next_tokens) {
   if (computed_logits_)
     throw std::runtime_error("ComputeLogits called again without calling AppendTokens or GenerateNextToken first");
 
-  std::cout<<"Inside of ComputeLogits = "<<search_->GetSequenceLength()<<std::endl;
-
   auto logits = state_->Run(search_->GetSequenceLength(), next_tokens, search_->GetNextIndices());
-  // std::cout<<"After state_->Run "<<std::endl;
   if (g_log.enabled && g_log.model_logits) {
     auto& stream = Log("model_logits");
     DumpValues(stream, Ort::TypeToTensorType<float>, logits.CopyDeviceToCpu().data(), logits.size());
     stream << std::endl;
   }
-  std::cout<<"Dump Stream"<<std::endl;
   SetLogits(logits);
-  std::cout<<"SetLogits"<<std::endl;
   last_action_ = Action::standard;
 
   computed_logits_ = true;
@@ -462,10 +438,8 @@ void Generator::GenerateNextToken() {
 
   if (!computed_logits_) {
     auto next_tokens = search_->GetNextTokens();
-    std::cout<<"Inside of GenerateNextToken = "<<next_tokens.size()<<std::endl;
     if (last_action_ == Action::rewound)
       search_->AppendTokens(next_tokens);
-    std::cout<<"Computing Logits"<<std::endl;
     ComputeLogits(next_tokens);
   }
   computed_logits_ = false;
@@ -473,7 +447,7 @@ void Generator::GenerateNextToken() {
   search_->ApplyMinLength(search.min_length);
   search_->ApplyRepetitionPenalty(search.repetition_penalty);
 
-  // if (g_log.enabled && g_log.generate_next_token) {
+  if (g_log.enabled && g_log.generate_next_token) {
   auto& stream = Log("generate_next_token");
   stream << SGR::Fg_Green << "do_sample: " << SGR::Reset << search.do_sample << ' '
           << SGR::Fg_Green << "top_k: " << SGR::Reset << search.top_k << ' '
@@ -481,7 +455,7 @@ void Generator::GenerateNextToken() {
           << SGR::Fg_Green << "temperature: " << SGR::Reset << search.temperature << ' '
           << SGR::Fg_Cyan << "sequence length: " << SGR::Reset << search_->GetSequenceLength()
           << std::endl;
-  // }
+  }
 
   last_action_ = Action::generated;
   if (!search.do_sample || search.top_k == 1 || search.temperature == 0) {
@@ -513,8 +487,6 @@ void Generator::RewindToLength(size_t new_length) {
   if (model_->config_->model.type == "whisper" || model_->config_->model.type == "phi3v" || model_->config_->model.type == "decoder-pipeline")
     throw std::runtime_error("RewindTo is currently not supported for " + model_->config_->model.type + ".");
   if (new_length > search_->GetSequenceLength())
-  std::cout<<"RwindToLength = "<<new_length<<std::endl;
-  std::cout<<"Current sequence length = "<<search_->GetSequenceLength()<<std::endl;
     throw std::runtime_error("Cannot rewind to a length greater than the current sequence length");
   if (new_length == search_->GetSequenceLength())
     return;

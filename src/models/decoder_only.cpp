@@ -17,28 +17,19 @@ DecoderOnly_State::DecoderOnly_State(const DecoderOnly_Model& model, DeviceSpan<
     : State{params, model},
       model_{model},
       position_inputs_{model, *this, sequence_lengths_unk} {
-  std::cout<<"Inside of DecoderOnly_State constructor"<<std::endl;
   input_ids_.Add();
   position_inputs_.Add();
   logits_.Add();
   kv_cache_.Add();
   extra_inputs_.Add();
-    auto& stream = Log("INITIALIZED model_input_values");
-    stream << std::endl;
-    DumpTensors(model_, stream, inputs_.data(), input_names_.data(), input_names_.size(), true);
-    std::cout<<"Updated input ids"<<std::endl;
 }
 
 DeviceSpan<float> DecoderOnly_State::Run(int total_length, DeviceSpan<int32_t>& next_tokens, DeviceSpan<int32_t> next_indices) {
-  std::cout<<"Inside of DecoderOnly_State::Run"<<std::endl;
   UpdateInputsOutputs(next_tokens, next_indices, total_length);
-  std::cout<<"Updated inputs and outputs"<<std::endl;
 
   // Graph capture enabled for token generation case, allowing it to repeat the same graph for each token.
   bool graph_capture_this_run = params_->use_graph_capture && input_ids_.GetShape()[1] == 1;
-  std::cout<<"Graph capture this run = "<<graph_capture_this_run<<std::endl;
   State::Run(*model_.session_decoder_, graph_capture_this_run);
-  std::cout<<"Ran the model"<<std::endl;
 
   return logits_.Get();
 }
