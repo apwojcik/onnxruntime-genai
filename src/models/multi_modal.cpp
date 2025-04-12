@@ -201,7 +201,7 @@ MultiModalPipelineState::MultiModalPipelineState(const MultiModalLanguageModel& 
   if (model_.speech_session_) {
     speech_state_ = std::make_unique<SpeechState>(model_, params, num_audio_tokens_);
   }
-  embedding_state_ = std::make_unique<EmbeddingState>(model, params, num_image_tokens_, num_audio_tokens_);
+  embedding_state_ = std::make_unique<EmbeddingState>(model, params, num_images_, num_image_tokens_, num_audio_tokens_);
   decoder_state_ = std::make_unique<MMDecoderState>(model_, sequence_lengths, params);
 
   if (vision_state_ != nullptr && model_.config_->model.vision.adapter_filename.has_value() && num_image_tokens_ > 0) {

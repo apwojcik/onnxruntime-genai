@@ -29,10 +29,18 @@ void Tensor::CreateTensor(std::span<const int64_t> shape, bool make_static) {
       throw std::runtime_error("Tensor: Static buffer new_bytes > bytes_");
     }
     ort_tensor_ = OrtValue::CreateTensor(p_device_->GetAllocator().GetInfo(), buffer_, new_bytes, shape, type_);
+    std::cout<<"Creating static tensor" <<std::endl;
     is_static_ = true;
   } else {
     ort_tensor_ = OrtValue::CreateTensor(p_device_->GetAllocator(), shape, type_);
     is_static_ = false;
+  }
+}
+
+void Tensor::CreateZeroTensor(OrtAllocator& allocator, std::span<const int64_t> shape, ONNXTensorElementDataType input_type) {
+  ort_tensor_ = OrtValue::CreateTensor(allocator, shape, input_type);
+  for(int i=0;i<shape[0];i++) {
+    ort_tensor_->GetTensorMutableData<int32_t>()[i] = 0;
   }
 }
 

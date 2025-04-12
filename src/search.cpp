@@ -332,9 +332,12 @@ void BeamSearch_Cpu::AppendTokens(DeviceSpan<int32_t>& next_tokens) {
 }
 
 bool BeamSearch_Cpu::IsDone() const {
+  std::cout<<"Inside BeamSearch_Cpu::IsDone()"<<std::endl;
   if (beam_scorer_->IsDone()) {
+    std::cout<<"BeamSearch_Cpu::IsDone() - beam_scorer_->IsDone()"<<std::endl;
     return true;
   } else if (sequences_.GetSequenceLength() == params_->search.max_length) {
+    std::cout<<"BeamSearch_Cpu::IsDone() - sequences_.GetSequenceLength() == params_->search.max_length"<<std::endl;
     return true;
   }
   return false;

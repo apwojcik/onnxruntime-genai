@@ -7,13 +7,14 @@
 namespace Generators {
 
 void Sequences::AfterAppendNextTokens(DeviceSpan<int32_t>& next_tokens, size_t batch_beam_size) {
-  if (g_log.enabled && g_log.append_next_tokens) {
+  // if (g_log.enabled && g_log.append_next_tokens) {
     auto& stream = Log("append_next_tokens");
     DumpSpan(stream, next_tokens.CopyDeviceToCpu());
     stream << std::endl;
-  }
+  // }
 
   current_length_ += static_cast<int>(next_tokens.size() / batch_beam_size);
+  std::cout<<"Current length in sequences= "<<current_length_<<std::endl;
 
   // With beam search, we rotate the buffers each iteration
   if (!sequences_next_.empty())

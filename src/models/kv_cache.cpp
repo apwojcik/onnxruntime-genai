@@ -242,6 +242,7 @@ void DefaultKeyValueCache::Update(DeviceSpan<int32_t> beam_indices, int total_le
     }
   }
   // total_length = 1;
+  std::cout<<"Total length = "<<total_length<<std::endl;
 
   shape_[2] = total_length;
   for (int i = 0; i < layer_count_ * 2; i++) {
@@ -359,7 +360,7 @@ void CrossCache::AddOutputs() {
     state_.outputs_.push_back(values_[i].get());
     state_.output_names_.push_back(output_name_strings_[i].c_str());
   }
-=}
+}
 
 void CrossCache::AddInputs() {
   for (int i = 0; i < layer_count_ * 2; ++i) {

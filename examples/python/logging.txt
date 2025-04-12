@@ -2,23 +2,52 @@ Loading model...
 Setting model to cuda...
 Model loaded
 Tokenizer created
-Tokenizer =  <onnxruntime_genai.onnxruntime_genai.Tokenizer object at 0x7d1805bc0bf0>
-Input: sjafgbahgaogbau nou Name of input_ids = encoder_input_ids
-Before AllocateInputIdsOnDevice = 
-Padded input ids size = 7
-After AllocateInputIdsOnDevice
-After AppendTokens
-Before ComputeLogits 
-Inside of ComputeLogits = 7
-Initializing encoder
-Nmae of InputIDs = encoder_input_ids
-Shape of InputIDs = 4 1
-Input index of InputIDs = 0
-Value of InputIDs = 0
-Added encoder input ids
-Prompt(s) encoded: ['translate English to French: Hello']
+Tokenizer =  <onnxruntime_genai.onnxruntime_genai.Tokenizer object at 0x7dfc38f80cb0>
+Input: Current length in sequences= 8
+New tokens size = 8
+Batch beam size = 4
+DefaultInputIDs::Update - beam search, sequence length before updating = 2
+After updating = 8
+DefaultInputIDs::Update - input_ids shape = 4 1
+Sequence length = 8
+DefaultInputIDs::Update - resizing input_ids shape from 1 to 8
+Encoder has been run
+Initializing decoder
+Total length = 1
+RUNNING DECODER
+In the first run next token size is = 8
+In Set Logits
+Current length in sequences= 9
+Updating input ids with next tokens = 4
+New tokens size = 4
+Batch beam size = 4
+DefaultInputIDs::Update - beam search, sequence length before updating = 1
+After updating = 4
+DefaultInputIDs::Update - input_ids shape = 4 1
+Sequence length = 4
+DefaultInputIDs::Update - resizing input_ids shape from 1 to 4
+Updated encoder attention mask = 9
+New length = 4
+Total length = 5
+RUNNING DECODER
+In Set Logits
+Current length in sequences= 10
+Updating input ids with next tokens = 4
+New tokens size = 4
+Batch beam size = 4
+After updating = 4
+DefaultInputIDs::Update - input_ids shape = 4 4
+Sequence length = 4
+Updated encoder attention mask = 10
+New length = 4
+Total length = 5
+Prompt(s) encoded: ['translate English to French: Good night']
 Args: Namespace(min_length=1, max_length=50, verbose=True, batch_size_for_cuda_graph=1, chat_template='', non_interactive=False, model_path='/workspace/optimum-t5/', execution_provider='cuda')
 Search options: {'max_length': 50, 'min_length': 1, 'num_beams': 4}
 GeneratorParams created
 Generator created
-input tokens =  <onnxruntime_genai.onnxruntime_genai.Tensor object at 0x7d1805bc0530>
+input tokens =  <onnxruntime_genai.onnxruntime_genai.Tensor object at 0x7dfc38f69ab0>
+Input tokens added
+Generating tokens ...
+
+▁Bonne▁nuit

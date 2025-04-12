@@ -30,10 +30,13 @@ DeviceSpan<float> EncoderDecoderState::Run(int current_length, DeviceSpan<int32_
   if(first_run_) {
     //INITIALIZE THE ENCODER AND RUN IT ONCE
 
-    std::cout<<"Initializing encoder"<<std::endl;
+    // std::cout<<"Initializing encoder"<<std::endl;
     encoder_input_ids_.name_ = "encoder_input_ids";
     encoder_input_ids_.Add();
-    std::cout<<"Added encoder input ids"<<std::endl;
+    // auto& stream = Log("Encoder Input IDS");
+    // stream << std::endl;
+    // DumpTensors(model_, stream, inputs_.data(), input_names_.data(), input_names_.size(), true);
+    // std::cout<<"Added encoder input ids"<<std::endl;
 
     encoder_attention_mask_.Add();
     // std::cout<<"Next Token size = "<<next_tokens.size()<<std::endl;
@@ -41,67 +44,73 @@ DeviceSpan<float> EncoderDecoderState::Run(int current_length, DeviceSpan<int32_
     cross_cache_ = std::make_unique<CrossCache>(*this, next_tokens.size());
     AddEncoderCrossCache(cross_cache_);
   
-    // encoder_input_ids_.Update(next_tokens);
+    encoder_input_ids_.Update(next_tokens);
     size_t new_length = static_cast<size_t>(encoder_input_ids_.GetShape()[1]);
     encoder_attention_mask_.Update(next_tokens, current_length, static_cast<int>(new_length));
     State::Run(*model_.session_encoder_);
     std::cout<<"Encoder has been run"<<std::endl;
 
     // CLEAR INPUTS AND OUTPUTS
-    // input_names_.clear();
-    // output_names_.clear();
-    // inputs_.clear();
-    // outputs_.clear();
-    // ClearIO();
+    ClearIO();
 
-    // //INITIALIZE THE DECODER
-    // std::cout<<"Initializing decoder"<<std::endl;
-    // // input_ids_.name_ = "input_ids";
+    //INITIALIZE THE DECODER
+    std::cout<<"Initializing decoder"<<std::endl;
+    // const std::array<int64_t, 2> zero_sized_tensor{params_->BatchBeamSize(), 1};
+    // std::cout<<"Zero sized tensor = "<<zero_sized_tensor[0]<<" "<<zero_sized_tensor[1]<<std::endl;
+    // zero_tensor = OrtValue::CreateTensor(model_.allocator_cpu_, zero_sized_tensor, model_.session_info_->GetInputDataType(model_.config_->model.decoder.inputs.input_ids));
+    // for(int i=0;i<params_->BatchBeamSize();i++) {
+    //   zero_tensor->GetTensorMutableData<int32_t>()[i] = 0;
+    // }
+    // *zero_tensor->GetTensorMutableData<int32_t>() = 0;
+    input_ids_.name_ = "input_ids";
     // input_ids_.Add();
+    input_ids_.AddDecoderInputs();
+    // input_ids_.Update(empty_span);
+    // std::cout<<"Added input ids"<<std::endl;
+    // input_names_.push_back("input_ids");
+    // inputs_.push_back(zero_tensor.get());
+    // std::cout<<"Added input names"<<std::endl;
 
-    // encoder_attention_mask_.Add();
+    encoder_attention_mask_.Add();
 
-    // logits_.Add();
-    // kv_cache_.Add();
+    logits_.Add();
+    // std::cout<<"Added logits"<<std::endl;
+    kv_cache_.Add();
+    // new_length = zero_sized_tensor[1];
+    new_length = static_cast<size_t>(input_ids_.GetShape()[1]);
+    kv_cache_.Update(next_indices, new_length);
+    logits_.Update(next_tokens, new_length);
+    // std::cout<<"Added kv cache"<<std::endl;
 
-    // AddDecoderCrossCache(cross_cache_);
+    AddDecoderCrossCache(cross_cache_);
     // std::cout<<"FIRST RUN"<<std::endl;
-    // // next_tokens.Zero();
-    // // input_ids_.Update(next_tokens);
 
-    // // auto& stream = Log("INITIALIZED model_input_values");
-    // // stream << std::endl;
-    // // DumpTensors(model_, stream, inputs_.data(), input_names_.data(), input_names_.size(), true);
-    // // std::cout<<"Updated input ids"<<std::endl;
-
-    // State::Run(*model_.session_decoder_);
-    // std::cout<<"RUNNING DECODER"<<std::endl;
-    // return logits_.Get();
-  }
+    State::Run(*model_.session_decoder_);
+    std::cout<<"RUNNING DECODER"<<std::endl;
     first_run_ = false;
+    std::cout<<"In the first run next token size is = "<<next_tokens.size()<<std::endl;
+    return logits_.Get();
+  }
 
-    // // UPDATE THE DECODER
-    // std::cout<<"Updating input ids with next tokens = "<<next_tokens.size()<<std::endl;
-    // input_ids_.Update(next_tokens);
-    // auto& stream = Log("UPDATED model_input_values");
-    // stream << std::endl;
-    // DumpTensors(model_, stream, inputs_.data(), input_names_.data(), input_names_.size(), true);
-    // std::cout<<"Updated input ids"<<std::endl;
-    // std::cout<<"Updated input ids with next tokens"<<std::endl;
+    // UPDATE THE DECODER
+    std::cout<<"Updating input ids with next tokens = "<<next_tokens.size()<<std::endl;
+    input_ids_.Update(next_tokens);
+    // input_ids_.UpdateDecoder(next_tokens);
 
-    // size_t new_length = static_cast<size_t>(input_ids_.GetShape()[1]);
-    // encoder_attention_mask_.Update(next_tokens, current_length, static_cast<int>(new_length));
-    // std::cout<<"Updated encoder attention mask = "<<current_length<<std::endl;
+    size_t new_length = static_cast<size_t>(input_ids_.GetShape()[1]);
+    encoder_attention_mask_.Update(next_tokens, current_length, static_cast<int>(new_length));
+    std::cout<<"Updated encoder attention mask = "<<current_length<<std::endl;
+    std::cout<<"New length = "<<new_length<<std::endl;
 
-    // kv_cache_.Update(next_indices, current_length);
+    kv_cache_.Update(next_indices, new_length + 1);
 
-    // logits_.Update(next_tokens, new_length);
+    logits_.Update(next_tokens, new_length);
     // std::cout<<"Updated logits"<<std::endl;
 
-    // // RUN THE DECODER
-    // State::Run(*model_.session_decoder_);
-    // std::cout<<"RUNNING DECODER"<<std::endl;
-    // return logits_.Get();
+    // RUN THE DECODER
+    State::Run(*model_.session_decoder_);
+    std::cout<<"RUNNING DECODER"<<std::endl;
+    return logits_.Get();
 
 }
 

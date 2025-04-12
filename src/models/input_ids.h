@@ -17,9 +17,11 @@ struct DefaultInputIDs : InputIDs {
   // Register input_ids as ORT session input.
   // Called only once during initialization of state.
   void Add() override;
+  void AddDecoderInputs();
   // Resize input_ids based on size of next_tokens.
   // Update value with next_tokens.
   void Update(DeviceSpan<int32_t> next_tokens) override;
+  void UpdateDecoder(DeviceSpan<int32_t> next_tokens);
   void InitializeValueToZero();
 
   std::array<int64_t, 2> GetShape() const override { return shape_; }
@@ -38,9 +40,11 @@ struct DefaultInputIDs : InputIDs {
   ONNXTensorElementDataType type_;
   std::unique_ptr<Tensor> value_;
   std::unique_ptr<Tensor> cast_value_;
+  std::unique_ptr<OrtValue> empty_decoder_input_ids_;
 
   std::unique_ptr<OrtValue> current_sequence_length_;
   std::unique_ptr<OrtValue> past_sequence_length_;
+  std::unique_ptr<OrtValue> zero_tensor;
 };
 
 

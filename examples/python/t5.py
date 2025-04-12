@@ -58,13 +58,15 @@ def main(args):
     while not generator.is_done():
         generator.generate_next_token()
         new_token = generator.get_next_tokens()[0]
+        # generator.rewind_to(1)
         # print("Len(new_token) = ", new_token)
         # generator.rewind_to(generator.get_next_tokens())
-        if args.verbose: 
-            print(f"Token generated: {new_token}")
-            print(f"Token Sequence: {generator.get_sequence(0)}")
-            print(tokenizer_stream.decode(new_token), end='', flush=True)
+        # if args.verbose: 
+        #     print(f"Token generated: {new_token}")
+        #     print(f"Token Sequence: {generator.get_sequence(0)}")
+        print(tokenizer_stream.decode(new_token), end='')
         # time.sleep(5)
+        # exit()
     run_time = time.time() - start_time
 
     for i in range(len(prompts)):

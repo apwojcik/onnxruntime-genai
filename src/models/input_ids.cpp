@@ -47,6 +47,16 @@ void DefaultInputIDs::Add() {
   }
 }
 
+void DefaultInputIDs::AddDecoderInputs() {
+  input_index_ = state_.inputs_.size();
+  const std::array<int64_t, 2> zero_sized_tensor{state_.params_->BatchBeamSize(), 1};
+
+  value_->CreateZeroTensor(model_.allocator_cpu_, zero_sized_tensor, model_.session_info_->GetInputDataType(model_.config_->model.decoder.inputs.input_ids));
+
+  state_.inputs_.push_back(value_->GetOrtTensor());
+  state_.input_names_.push_back(name_);
+}
+
 void DefaultInputIDs::Update(DeviceSpan<int32_t> new_tokens) {
   auto new_tokens_cpu = new_tokens.CopyDeviceToCpu();
 
@@ -68,16 +78,23 @@ void DefaultInputIDs::Update(DeviceSpan<int32_t> new_tokens) {
   }
 
   // For beam search, resize input_ids shape based on new_tokens
+  std::cout<<"New tokens size = "<<new_tokens.size()<<std::endl;
+  std::cout<<"Batch beam size = "<<state_.params_->BatchBeamSize()<<std::endl;
   size_t sequence_length = static_cast<size_t>(new_tokens.size()) / state_.params_->BatchBeamSize();
   if (is_prompt_ && state_.params_->search.num_beams > 1)
-    sequence_length = static_cast<size_t>(new_tokens.size()) / state_.params_->search.batch_size;
+    std::cout<<"DefaultInputIDs::Update - beam search, sequence length before updating = "<<sequence_length<<std::endl;
+    sequence_length = (static_cast<size_t>(new_tokens.size())) / state_.params_->search.batch_size;
+    std::cout<<"After updating = "<<sequence_length<<std::endl;
+  
+  std::cout<<"DefaultInputIDs::Update - input_ids shape = "<<shape_[0]<<" "<<shape_[1]<<std::endl;
+  std::cout<<"Sequence length = "<<sequence_length<<std::endl;
 
   if (static_cast<size_t>(shape_[1]) != sequence_length) {
+    std::cout<<"DefaultInputIDs::Update - resizing input_ids shape from "<<shape_[1]<<" to "<<sequence_length<<std::endl;
     shape_[1] = sequence_length;
     value_->CreateTensor(shape_, state_.params_->use_graph_capture && shape_[1] == 1);
     state_.inputs_[input_index_] = value_->GetOrtTensor();
   }
-
 
   // Update input_ids with next tokens
   auto data_span = value_->GetDeviceSpan<int32_t>();
@@ -104,6 +121,72 @@ void DefaultInputIDs::Update(DeviceSpan<int32_t> new_tokens) {
 
   is_prompt_ = false;
 }
+
+void DefaultInputIDs::UpdateDecoder(DeviceSpan<int32_t> new_tokens) {
+  auto new_tokens_cpu = new_tokens.CopyDeviceToCpu();
+
+  const auto get_unpadded_sequence_length = [](std::span<const int32_t> input_ids, int32_t pad_token_id) {
+    for (int32_t i = 0; i < input_ids.size(); i++) {
+      if (input_ids[i] == pad_token_id)
+        return i;
+    }
+    return static_cast<int32_t>(input_ids.size());
+  };
+
+  if (current_sequence_length_ && past_sequence_length_) {
+    if (state_.params_->BatchBeamSize() != 1) {
+      throw std::runtime_error("Batch size must be 1 for current_sequence_length and past_sequence_length inputs");
+    }
+    auto new_sequence_length = get_unpadded_sequence_length(new_tokens_cpu, model_.config_->model.pad_token_id);
+    *current_sequence_length_->GetTensorMutableData<int32_t>() += new_sequence_length;
+    *past_sequence_length_->GetTensorMutableData<int32_t>() += new_sequence_length;
+  }
+
+  // For beam search, resize input_ids shape based on new_tokens
+  std::cout<<"New tokens size in decoder = "<<new_tokens.size()<<std::endl;
+  std::cout<<"Batch beam size in decoder  = "<<state_.params_->BatchBeamSize()<<std::endl;
+  size_t sequence_length = static_cast<size_t>(new_tokens.size()) / state_.params_->BatchBeamSize();
+  // if (is_prompt_ && state_.params_->search.num_beams > 1)
+  //   std::cout<<"DefaultInputIDs::Update - beam search, sequence length before updating = "<<sequence_length<<std::endl;
+  //   sequence_length = (static_cast<size_t>(new_tokens.size())) / state_.params_->search.batch_size;
+  //   std::cout<<"After updating = "<<sequence_length<<std::endl;
+  
+  std::cout<<"DefaultInputIDs::Update - input_ids shape  in decoder = "<<shape_[0]<<" "<<shape_[1]<<std::endl;
+  std::cout<<"Sequence length  in decoder = "<<sequence_length<<std::endl;
+
+  if (static_cast<size_t>(shape_[1]) != sequence_length) {
+    std::cout<<"DefaultInputIDs::Update - resizing input_ids shape from  in decoder "<<shape_[1]<<" to "<<sequence_length<<std::endl;
+    shape_[1] = sequence_length;
+    value_->CreateTensor(shape_, state_.params_->use_graph_capture && shape_[1] == 1);
+    state_.inputs_[input_index_] = value_->GetOrtTensor();
+  }
+
+  // Update input_ids with next tokens
+  auto data_span = value_->GetDeviceSpan<int32_t>();
+
+  // For beam search
+  if (is_prompt_ && state_.params_->search.num_beams > 1) {
+    int row_size = static_cast<int>(shape_[1]);
+
+    for (int b = 0; b < shape_[0]; b++) {
+      int in_offset = (b / state_.params_->search.num_beams) * row_size;
+      int out_offset = b * row_size;
+      data_span.subspan(out_offset, row_size).CopyFrom(new_tokens.subspan(in_offset, row_size));
+    }
+  } else {
+    data_span.CopyFrom(new_tokens);
+  }
+
+  if (type_ == Ort::TypeToTensorType<int64_t>) {
+    if (!cast_value_->ort_tensor_ || static_cast<size_t>(cast_value_->GetShape()[1]) != sequence_length)
+      cast_value_->CreateTensor(shape_, state_.params_->use_graph_capture && shape_[1] == 1);
+    Cast(*value_->GetOrtTensor(), cast_value_->ort_tensor_, *model_.p_device_inputs_, type_);
+    state_.inputs_[input_index_] = cast_value_->GetOrtTensor();
+  }
+
+  is_prompt_ = false;
+}
+
 WindowedInputIDs::WindowedInputIDs(State& state) : state_{state} {
   name_ = model_.config_->model.decoder.inputs.input_ids.c_str();
 
