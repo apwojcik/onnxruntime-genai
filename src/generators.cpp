@@ -12,6 +12,7 @@
 #include "dml/interface.h"
 #include "qnn/interface.h"
 #include "webgpu/interface.h"
+#include "engine/engine.h"
 
 #if defined(_WIN32)
 EXTERN_C IMAGE_DOS_HEADER __ImageBase;

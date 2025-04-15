@@ -21,6 +21,12 @@ struct Config {
     static constexpr std::string_view LogitsName = "logits";
     static constexpr std::string_view PresentKeyName = "present.%d.key";
     static constexpr std::string_view PresentValueName = "present.%d.value";
+    static constexpr std::string_view CumulativeSequenceLengths = "cumulative_sequence_lengths";
+    static constexpr std::string_view SequenceLengths = "sequence_lengths";
+    static constexpr std::string_view MaxQueryLength = "max_query_length";
+    static constexpr std::string_view MaxSequenceLength = "max_sequence_length";
+    static constexpr std::string_view BlockTableName = "block_table";
+    static constexpr std::string_view SlotMappingName = "slot_mapping";
 
     static constexpr std::string_view InputsEmbedsName = "inputs_embeds";
     static constexpr std::string_view CurrentSequenceLengthName = "current_sequence_length";
@@ -176,6 +182,12 @@ struct Config {
         std::string current_sequence_length{Defaults::CurrentSequenceLengthName};
         std::string past_sequence_length{Defaults::PastSequenceLengthName};
         std::string total_sequence_length{Defaults::TotalSequenceLengthName};
+        std::string cumulative_sequence_lengths{Defaults::CumulativeSequenceLengths};
+        std::string sequence_lengths{Defaults::SequenceLengths};
+        std::string max_query_length{Defaults::MaxQueryLength};
+        std::string max_sequence_length{Defaults::MaxSequenceLength};
+        std::string block_table{Defaults::BlockTableName};
+        std::string slot_mapping{Defaults::SlotMappingName};
       } inputs;
 
       struct Outputs {
