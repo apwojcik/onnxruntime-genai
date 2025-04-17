@@ -204,6 +204,19 @@ std::string Tokenizer::Decode(std::span<const int32_t> tokens) const {
   return string;
 }
 
+std::string Tokenizer::ApplyChatTemplate(const char* template_str, const char* messages, bool add_generation_prompt) const {
+  ort_extensions::OrtxObjectPtr<OrtxTensorResult> templated_text;
+  CheckResult(OrtxApplyChatTemplate(tokenizer_, template_str, messages, templated_text.ToBeAssigned(), add_generation_prompt, false /*tokenize*/));
+
+  ort_extensions::OrtxObjectPtr<OrtxTensor> tensor;
+  CheckResult(OrtxTensorResultGetAt(templated_text.get(), 0, tensor.ToBeAssigned()));
+
+  const char* text_ptr{};
+  CheckResult(OrtxGetTensorData(tensor.get(), reinterpret_cast<const void**>(&text_ptr), nullptr, nullptr));
+
+  return text_ptr;
+}
+
 std::vector<int32_t> Tokenizer::EncodeBatch(std::span<const std::string> strings) const {
   std::vector<std::vector<int32_t>> sequences;
   std::vector<std::span<const int32_t>> span_sequences;
@@ -255,14 +268,15 @@ int32_t Tokenizer::TokenToTokenId(const char* token) const {
 // arena already being destroyed.
 void EnsureDeviceOrtInit(OrtSession& session, DeviceType type) {
   // CPU Allocator is a special case, it's not in the owned 'allocator_device_' table below so we handle it separately
-  if (type == DeviceType::CPU)
+  // OpenVINO delegates to the CPU device allocator
+  if (type == DeviceType::CPU || type == DeviceType::OpenVINO)
     return;
 
   auto& device = GetOrtGlobals()->allocator_device_[static_cast<int>(type)];
   if (device)
     return;
 
-  static const char* device_type_names[] = {"CPU (Not used, see above)", "Cuda", "DML", "WebGPU_Buffer", "QnnHtpShared"};
+  static const char* device_type_names[] = {"CPU (Not used, see above)", "Cuda", "DML", "WebGPU_Buffer", "QnnHtpShared", "OpenVINO (Not used, see above)"};
   static_assert(std::size(device_type_names) == static_cast<size_t>(DeviceType::MAX));
 
   auto name = device_type_names[static_cast<int>(type)];
@@ -479,7 +493,6 @@ void Model::CreateSessionOptionsFromConfig(const Config::SessionOptions& config_
       }
 
       session_options.AppendExecutionProvider_CUDA_V2(*ort_provider_options);
-
     } else if (provider_options.name == "rocm") {
       OrtROCMProviderOptions ort_provider_options;
 
@@ -536,6 +549,9 @@ void Model::CreateSessionOptionsFromConfig(const Config::SessionOptions& config_
 
       else if (provider_options.name == "WebGPU")
         p_device_ = GetDeviceInterface(DeviceType::WEBGPU);
+
+      else if (provider_options.name == "OpenVINO")
+        p_device_ = GetDeviceInterface(DeviceType::OpenVINO);
 
       else if (provider_options.name == "VitisAI") {
         session_options.AddConfigEntry("session.inter_op.allow_spinning", "0");
