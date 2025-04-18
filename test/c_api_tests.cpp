@@ -913,4 +913,37 @@ TEST(ContinuousBatching, API) {
       request_pool.erase(it);
     }
   }
+
+  // Alternate idea to work better with threading
+  while (!End()) {
+    // Add any pending requests received (from another thread, very pseudo here)
+    while (!request_queue.empty()) {
+      auto sequence = OgaSequences::Create();
+      tokenizer->Encode(request_queue.front().c_str(), *sequence);
+      request_pool.push_back(OgaRequest::Create(*sequence, *OgaGeneratorParams::Create(*model)));
+      engine->Add(*request_pool.back());
+    }   
+
+    // Remove any cancelled requests
+    while (!cancelled_requests_queue.empty()) {
+      auto request = cancelled_requests_queue.pop();
+      engine->Remove(*request);
+      request_pool.erase(request);
+    }
+
+    // Run the engine and process outputs
+    engine->Step();
+    while(auto request = engine->GetReadyRequest()) {
+      while (request->HasNewTokens()) {
+        auto token = request->GetNewToken();
+        std::cout << "New token: " << token << std::endl;
+        std::cout << "Streaming text: " << request->TokenizerStream->Decode(token) << std::endl;
+      }
+
+      if (request->IsDone()) {
+        engine->Remove(*request);
+        request_pool.erase(request);
+      }
+    }
+  }
 }
