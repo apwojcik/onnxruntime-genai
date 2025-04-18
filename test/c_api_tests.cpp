@@ -4,6 +4,7 @@
 #include <cstring>  // for memcmp
 #include <numeric>
 #include <iostream>
+#include <queue>
 #include <thread>
 #include <vector>
 #include "span.h"
@@ -869,3 +870,47 @@ TEST(CAPITests, RewindGptFp32CAPI) {
   EXPECT_TRUE(0 == std::memcmp(expected_output_start, sequence_data, sequence_length * sizeof(int32_t)));
 }
 #endif
+
+TEST(ContinuousBatching, API) {
+  std::queue<std::string> request_queue;
+  request_queue.push("What is 2 + 3?");
+
+  std::list<std::unique_ptr<OgaRequest>> request_pool;
+
+  auto config = OgaConfig::Create(PHI2_PATH);
+  auto model = OgaModel::Create(*config);
+  auto engine = OgaEngine::Create(*model);
+  auto tokenizer = OgaTokenizer::Create(*model);
+
+  while (!request_queue.empty()) {
+    auto sequence = OgaSequences::Create();
+    tokenizer->Encode(request_queue.front().c_str(), *sequence);
+    request_pool.push_back(OgaRequest::Create(*sequence, *OgaGeneratorParams::Create(*model)));
+    engine->Add(*request_pool.back());
+    request_queue.pop();
+  }
+
+  while (engine->HasPendingRequests()) {
+    engine->Step();
+
+    std::vector<std::list<std::unique_ptr<OgaRequest>>::iterator> requests_to_remove;
+
+    for (auto request_it = request_pool.begin(); request_it != request_pool.end(); ++request_it) {
+      auto& request = *request_it;
+      while(request->HasNewTokens()) {
+        auto token = request->GetNewToken();
+        std::cout << "New token: " << token << std::endl;
+//          std::cout << "Streaming text: " << request->TokenizerStream->Decode(token) << std::endl;
+      }
+
+      if (request->IsDone()) {
+        engine->Remove(*request);
+        requests_to_remove.push_back(request_it);
+      }
+    }
+
+    for (auto& it : requests_to_remove) {
+      request_pool.erase(it);
+    }
+  }
+}
