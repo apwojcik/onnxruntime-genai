@@ -8,7 +8,7 @@ namespace Generators {
 
 Logits::Logits(State& state)
     : state_{state},
-      shape_{static_cast<int64_t>(state_.params_->BatchBeamSize()), 0, model_.config_->model.vocab_size},
+      shape_{static_cast<int64_t>(state_.params_->BatchBeamSize()), model_.config_->model.vocab_size},
       type_{model_.session_info_->GetOutputDataType(model_.config_->model.decoder.outputs.logits)} {
   output_raw_ = std::make_unique<Tensor>(model_.p_device_inputs_, type_);
 
@@ -23,14 +23,14 @@ Logits::Logits(State& state)
 }
 
 DeviceSpan<float> Logits::Get() {
-  size_t element_count = shape_[0] * shape_[1] * shape_[2];
+  size_t element_count = shape_[0] * shape_[1];
 
   // The model's output logits are {batch_size*num_beams, input_seq_len, vocab_size}
   OrtValue* logits_of_last_token = output_raw_->GetOrtTensor();
-  std::array<int64_t, 3> shape_last{shape_[0], 1, shape_[2]};
-  if (shape_[1] != 1) {
-    const size_t seq_length = shape_[1];
-    const size_t vocab_size = shape_[2];
+  std::array<int64_t, 2> shape_last{shape_[0], shape_[1]};
+  // if (shape_[1] != 1) {
+    // const size_t seq_length = shape_[1];
+    const size_t vocab_size = shape_[1];
     const size_t num_beams = state_.params_->search.num_beams;
 
     // create new OrtValue for logits_of_last_token and use output_last_tokens_ to hold it
@@ -52,14 +52,14 @@ DeviceSpan<float> Logits::Get() {
       size_t token_index = input_sequence_lengths[batch_index] - 1;
       for (int beam_index = 0; beam_index < num_beams; beam_index++) {
         auto target = logits_last_tokens.subspan(vocab_index * element_size, vocab_size * element_size);
-        auto source = logits_raw.subspan((vocab_index * seq_length + token_index * vocab_size) * element_size, vocab_size * element_size);
+        auto source = logits_raw.subspan((vocab_index + token_index * vocab_size) * element_size, vocab_size * element_size);
         target.CopyFrom(source);
         vocab_index += vocab_size;
       }
     }
 
-    element_count = shape_[0] * shape_[2];  // shape_[1] is now 1, so the element count must be updated
-  }
+    element_count = shape_[0] * shape_[1];  // shape_[1] is now 1, so the element count must be updated
+  // }
 
   // Convert from float16 to float32 if necessary
   if (type_ == Ort::TypeToTensorType<Ort::Float16_t>) {
@@ -76,7 +76,7 @@ DeviceSpan<float> Logits::Get() {
       model_.p_device_inputs_->LaunchHandleEOSArray(
           logits_.Span().data(),
           static_cast<int>(shape_[0]) /* batch_beam_size*/,
-          static_cast<int>(shape_[2]) /* vocab_size */,
+          static_cast<int>(shape_[1]) /* vocab_size */,
           cuda_eos_token_ids_.Span().data(),
           static_cast<int>(cuda_eos_token_ids_.size()));
     return logits_;
@@ -95,24 +95,25 @@ void Logits::Update(const DeviceSpan<int32_t>& next_tokens, size_t new_kv_length
     return;
   }
 
-  // Store length of input sequence for each batch for the get step
-  for (int b = 0; b < state_.params_->search.batch_size; b++) {
-    // Find the first non pad token from the end
-    size_t token_index = new_kv_length;
-    while (token_index-- > 0) {
-      auto next_token = const_cast<DeviceSpan<int32_t>&>(next_tokens).CpuSpan()[b * new_kv_length + token_index];
-      if (next_token != model_.config_->model.pad_token_id)
-        break;
-    }
-    input_sequence_lengths[b] = static_cast<int>(token_index + 1);
-  }
+
+  // // Store length of input sequence for each batch for the get step
+  // for (int b = 0; b < state_.params_->search.batch_size; b++) {
+  //   // Find the first non pad token from the end
+  //   size_t token_index = new_kv_length;
+  //   while (token_index-- > 0) {
+  //     auto next_token = const_cast<DeviceSpan<int32_t>&>(next_tokens).CpuSpan()[b * new_kv_length + token_index];
+  //     if (next_token != model_.config_->model.pad_token_id)
+  //       break;
+  //   }
+  //   input_sequence_lengths[b] = static_cast<int>(token_index + 1);
+  // }
 
   if (output_raw_->ort_tensor_ && static_cast<size_t>(output_raw_->GetShape()[1]) == new_kv_length) {
     return;
   }
 
-  shape_[1] = new_kv_length;
-  output_raw_->CreateTensor(shape_, state_.params_->use_graph_capture && shape_[1] == 1);
+  // shape_[1] = new_kv_length;
+  output_raw_->CreateTensor(shape_, state_.params_->use_graph_capture);
   state_.outputs_[output_index_] = output_raw_->GetOrtTensor();
 }
 

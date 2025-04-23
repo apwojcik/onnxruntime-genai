@@ -9,6 +9,13 @@ struct InputIDs {
   virtual void Update(DeviceSpan<int32_t> next_tokens) = 0;
 };
 
+struct DInputIDs {
+  virtual ~DInputIDs() = default;
+  virtual void AddDecoderInputs(int32_t pad_value) = 0;
+  virtual std::array<int64_t, 1> GetShape() const = 0;
+  virtual void Update(DeviceSpan<int32_t> next_tokens) = 0;
+};
+
 struct DefaultInputIDs : InputIDs {
   DefaultInputIDs(State& state);
   DefaultInputIDs(const DefaultInputIDs&) = delete;
@@ -42,6 +49,37 @@ struct DefaultInputIDs : InputIDs {
   std::unique_ptr<OrtValue> past_sequence_length_;
 };
 
+
+struct DecoderInputIDs : DInputIDs {
+  DecoderInputIDs(State& state);
+  DecoderInputIDs(const DecoderInputIDs&) = delete;
+  DecoderInputIDs& operator=(const DecoderInputIDs&) = delete;
+
+  // Register input_ids as ORT session input.
+  // Called only once during initialization of state.
+  void AddDecoderInputs(int32_t pad_value);
+  // Resize input_ids based on size of next_tokens.
+  // Update value with next_tokens.
+  void Update(DeviceSpan<int32_t> next_tokens) override;
+
+  std::array<int64_t, 1> GetShape() const override { return shape_; }
+  const char* name_;
+  std::array<int64_t, 1> vec_shape_{};
+
+  OrtValue* Get() { return value_->GetOrtTensor(); }
+
+ private:
+  State& state_;
+  const Model& model_{state_.model_};
+  size_t input_index_{~0U};
+
+  bool is_prompt_{true};
+
+  std::array<int64_t, 1> shape_{};
+  ONNXTensorElementDataType type_;
+  std::unique_ptr<Tensor> value_;
+  std::unique_ptr<Tensor> cast_value_;
+};
 // Certain models can only process a fixed number of tokens at a time.
 // For example, given a prompt with 120 tokens, and a model that can only process 20 tokens at a time,
 // this class will split the prompt into 6 windows of 20 tokens each.

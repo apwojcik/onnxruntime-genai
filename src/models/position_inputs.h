@@ -17,6 +17,8 @@ struct DefaultPositionInputs : PositionInputs {
 
   void RewindTo(size_t index) override;
 
+  std::string name_;
+
  private:
   void AddAttentionMask();
   void AddPositionIDs();

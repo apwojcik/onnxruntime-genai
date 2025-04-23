@@ -22,7 +22,7 @@ struct Logits {
   const Model& model_{state_.model_};
   size_t output_index_{~0U};
 
-  std::array<int64_t, 3> shape_{};
+  std::array<int64_t, 2> shape_{};
   ONNXTensorElementDataType type_;
 
   // Tensor to keep the logits of the last tokens. It is used in the 2 cases below. Otherwhise, it is not used.

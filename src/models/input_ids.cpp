@@ -33,6 +33,17 @@ DefaultInputIDs::DefaultInputIDs(State& state)
   cast_value_ = std::make_unique<Tensor>(model_.p_device_inputs_, Ort::TypeToTensorType<int64_t>);
 }
 
+DecoderInputIDs::DecoderInputIDs(State& state)
+    : state_{state} {
+  name_ = model_.config_->model.decoder.inputs.input_ids.c_str();
+  shape_ = {state_.params_->BatchBeamSize()};
+  type_ = model_.session_info_->GetInputDataType(name_);
+
+  value_ = std::make_unique<Tensor>(model_.p_device_inputs_, Ort::TypeToTensorType<int32_t>);
+  cast_value_ = std::make_unique<Tensor>(model_.p_device_inputs_, Ort::TypeToTensorType<int64_t>);
+}
+
+
 void DefaultInputIDs::Add() {
   input_index_ = state_.inputs_.size();
 
@@ -45,6 +56,16 @@ void DefaultInputIDs::Add() {
     state_.input_names_.push_back(model_.config_->model.decoder.inputs.past_sequence_length.c_str());
     state_.inputs_.push_back(past_sequence_length_.get());
   }
+}
+
+void DecoderInputIDs::AddDecoderInputs(int32_t pad_value) {
+  input_index_ = state_.inputs_.size();
+  const std::array<int64_t, 1> zero_sized_tensor{1};
+
+  value_->CreatePadTensor(model_.allocator_cpu_, zero_sized_tensor, model_.session_info_->GetInputDataType(model_.config_->model.decoder.inputs.input_ids),pad_value);
+
+  state_.inputs_.push_back(value_->GetOrtTensor());
+  state_.input_names_.push_back(name_);
 }
 
 void DefaultInputIDs::Update(DeviceSpan<int32_t> new_tokens) {
@@ -99,6 +120,42 @@ void DefaultInputIDs::Update(DeviceSpan<int32_t> new_tokens) {
     Cast(*value_->GetOrtTensor(), cast_value_->ort_tensor_, *model_.p_device_inputs_, type_);
     state_.inputs_[input_index_] = cast_value_->GetOrtTensor();
   }
+
+  is_prompt_ = false;
+}
+
+void DecoderInputIDs::Update(DeviceSpan<int32_t> new_tokens) {
+  auto new_tokens_cpu = new_tokens.CopyDeviceToCpu();
+
+  const auto get_unpadded_sequence_length = [](std::span<const int32_t> input_ids, int32_t pad_token_id) {
+    for (int32_t i = 0; i < input_ids.size(); i++) {
+      if (input_ids[i] == pad_token_id)
+        return i;
+    }
+    return static_cast<int32_t>(input_ids.size());
+  };
+  // For beam search, resize input_ids shape based on new_tokens
+  size_t sequence_length = static_cast<size_t>(new_tokens.size()) / state_.params_->BatchBeamSize();
+  if (is_prompt_ && state_.params_->search.num_beams > 1)
+    sequence_length = static_cast<size_t>(new_tokens.size()) / state_.params_->search.batch_size;
+
+  if (static_cast<size_t>(shape_[1]) != sequence_length) {
+    shape_[1] = sequence_length;
+    value_->CreateTensor(shape_, state_.params_->use_graph_capture && shape_[1] == 1);
+    state_.inputs_[input_index_] = value_->GetOrtTensor();
+  }
+
+  // Update input_ids with next tokens
+  auto data_span = value_->GetDeviceSpan<int32_t>();
+
+  // For beam search
+
+  data_span.CopyFrom(new_tokens);
+
+  if (!cast_value_->ort_tensor_)
+    cast_value_->CreateTensor(shape_, state_.params_->use_graph_capture);
+  Cast(*value_->GetOrtTensor(), cast_value_->ort_tensor_, *model_.p_device_inputs_, Ort::TypeToTensorType<int64_t>);
+  state_.inputs_[input_index_] = cast_value_->GetOrtTensor();
 
   is_prompt_ = false;
 }

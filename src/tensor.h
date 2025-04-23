@@ -11,6 +11,7 @@ struct Tensor : std::enable_shared_from_this<Tensor>, LeakChecked<Tensor>, Exter
   // A static tensor is allocated once on a buffer which is reused
   // A non-static tensor is allocated as a new OrtValue every time CreateTensor is called
   void CreateTensor(std::span<const int64_t> shape, bool make_static = false);
+  void CreatePadTensor(OrtAllocator& allocator, std::span<const int64_t> shape, ONNXTensorElementDataType input_type, int32_t pad_value);
 
   void MakeStatic();  // Make the tensor static, if it is not already
 

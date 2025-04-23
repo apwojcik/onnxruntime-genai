@@ -36,6 +36,13 @@ void Tensor::CreateTensor(std::span<const int64_t> shape, bool make_static) {
   }
 }
 
+void Tensor::CreatePadTensor(OrtAllocator& allocator, std::span<const int64_t> shape, ONNXTensorElementDataType input_type, int32_t pad_value) {
+  ort_tensor_ = OrtValue::CreateTensor(allocator, shape, input_type);
+  for(int i=0;i<shape[0];i++) {
+    ort_tensor_->GetTensorMutableData<int64_t>()[i] = pad_value;
+  }
+}
+
 void Tensor::MakeStatic() {
   if (ort_tensor_ == nullptr) {
     throw std::runtime_error("Tensor: MakeStatic called before CreateTensor");
