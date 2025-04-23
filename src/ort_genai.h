@@ -667,16 +667,20 @@ struct OgaRequest : OgaAbstract {
     return f;
   }
 
-  bool HasNewTokens() const {
-    bool f;
-    OgaCheckResult(OgaRequestHasNewTokens(this, &f));
-    return f;
+  int32_t GetNextToken() {
+    int32_t token;
+    OgaCheckResult(OgaRequestGetNextToken(this, &token));
+    return token;
   }
 
-  int32_t GetNewToken() const {
-    int32_t token;
-    OgaCheckResult(OgaRequestGetNewToken(this, &token));
-    return token;
+  void SetUserData(void* user_data) {
+    OgaCheckResult(OgaRequestSetUserData(this, user_data));
+  }
+
+  void* GetUserData() const {
+    void* user_data;
+    OgaCheckResult(OgaRequestGetUserData(this, &user_data));
+    return user_data;
   }
 
   static void operator delete(void* p) { OgaDestroyRequest(reinterpret_cast<OgaRequest*>(p)); }
@@ -695,6 +699,12 @@ struct OgaEngine : OgaAbstract {
     return f;
   }
 
+  OgaRequest* ProcessRequests() {
+    OgaRequest* p;
+    OgaCheckResult(OgaEngineProcessRequests(this, &p));
+    return p;
+  }
+
   void Add(OgaRequest& request) {
     OgaCheckResult(OgaEngineAddRequest(this, &request));
   }
@@ -703,8 +713,8 @@ struct OgaEngine : OgaAbstract {
     OgaCheckResult(OgaEngineRemoveRequest(this, &request));
   }
 
-  void Step() {
-    OgaCheckResult(OgaEngineStep(this));
+ void Shutdown() {
+    OgaCheckResult(OgaEngineShutdown(this));
   }
 
   static void operator delete(void* p) { OgaDestroyEngine(reinterpret_cast<OgaEngine*>(p)); }

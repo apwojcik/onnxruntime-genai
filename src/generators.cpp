@@ -3,6 +3,7 @@
 
 #include "generators.h"
 #include "sequences.h"
+#include "engine.h"
 #include "models/env_utils.h"
 #include "models/model.h"
 #include "models/decoder_only.h"

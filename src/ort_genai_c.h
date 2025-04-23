@@ -694,27 +694,25 @@ OGA_EXPORT OgaResult* OGA_API_CALL OgaCreateEngine(const OgaModel* model, OgaEng
 OGA_EXPORT void OGA_API_CALL OgaDestroyEngine(OgaEngine* engine);
 
 /**
- * \brief Run one step of the OgaEngine
-* \param[in] engine The engine to run.
-*/
-OGA_EXPORT OgaResult* OGA_API_CALL OgaEngineStep(OgaEngine* engine);
-
-/**
  * \brief Return if the engine has pending requests
  * \param[in] engine The engine to check.
  * \param[out] out True if the engine has pending requests, false otherwise.
  * \return OgaResult containing the error message if the operation failed.
  */
-OGA_EXPORT OgaResult* OGA_API_CALL OgaEngineHasPendingRequests(OgaEngine* engine, bool* out);
+OGA_EXPORT OgaResult* OGA_API_CALL OgaEngineHasPendingRequests(const OgaEngine* engine, bool* out);
+
+OGA_EXPORT OgaResult* OGA_API_CALL OgaEngineProcessRequests(OgaEngine* engine, OgaRequest** request);
 
 OGA_EXPORT OgaResult* OGA_API_CALL OgaEngineAddRequest(OgaEngine* engine, OgaRequest* request);
 OGA_EXPORT OgaResult* OGA_API_CALL OgaEngineRemoveRequest(OgaEngine* engine, OgaRequest* request);
+OGA_EXPORT OgaResult* OGA_API_CALL OgaEngineShutdown(OgaEngine* engine);
 
 OGA_EXPORT OgaResult* OGA_API_CALL OgaCreateRequest(OgaSequences* tokens, OgaGeneratorParams* params, OgaRequest** out);
 OGA_EXPORT void OGA_API_CALL OgaDestroyRequest(OgaRequest* request);
-OGA_EXPORT OgaResult* OGA_API_CALL OgaRequestHasNewTokens(const OgaRequest* request, bool* out);
-OGA_EXPORT OgaResult* OGA_API_CALL OgaRequestGetNewToken(const OgaRequest* request, int32_t* out);
+OGA_EXPORT OgaResult* OGA_API_CALL OgaRequestGetNextToken(OgaRequest* request, int32_t* out);
 OGA_EXPORT OgaResult* OGA_API_CALL OgaRequestIsDone(const OgaRequest* request, bool* out);
+OGA_EXPORT OgaResult* OGA_API_CALL OgaRequestSetUserData(OgaRequest* request, void* user_data);
+OGA_EXPORT OgaResult* OGA_API_CALL OgaRequestGetUserData(const OgaRequest* request, void** user_data);
 
 #ifdef __cplusplus
 }

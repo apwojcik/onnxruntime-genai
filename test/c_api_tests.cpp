@@ -872,16 +872,67 @@ TEST(CAPITests, RewindGptFp32CAPI) {
 #endif
 
 TEST(ContinuousBatching, API) {
-  std::queue<std::string> request_queue;
-  request_queue.push("What is 2 + 3?");
-
-  std::list<std::unique_ptr<OgaRequest>> request_pool;
-
   auto config = OgaConfig::Create(PHI2_PATH);
   auto model = OgaModel::Create(*config);
   auto engine = OgaEngine::Create(*model);
   auto tokenizer = OgaTokenizer::Create(*model);
 
+  struct UserData {
+    std::string prompt;
+  };
+
+  std::mutex mutex;
+  std::condition_variable cv;
+
+  // On a separate thread, create some requests and add them to the engine
+  auto thread = std::thread([&]() {
+    static const char* prompts[] = {
+        "What is 2 + 3?",
+        "What is the capital of France?",
+        "What is the meaning of life?",
+    };
+
+    for (auto prompt : prompts) {
+      auto sequence = OgaSequences::Create();
+      auto user_data = std::make_unique<UserData>();
+      user_data->prompt = prompt;
+      tokenizer->Encode(user_data->prompt.c_str(), *sequence);
+      auto request = OgaRequest::Create(*sequence, *OgaGeneratorParams::Create(*model));
+      request->SetUserData(user_data.release());
+      engine->Add(*request);
+    }
+
+    // Sleep until work items are done
+    std::unique_lock<std::mutex> lock(mutex);
+    cv.wait(lock, [&]() { return !engine->HasPendingRequests(); });
+
+    // Shutdown the engine
+    engine->Shutdown();
+  });
+
+  while (auto request = engine->ProcessRequests()) {
+    auto token = request->GetNextToken();
+    std::cout << "Next token for " << reinterpret_cast<UserData*>(request->GetUserData())->prompt << " is " << token << std::endl;
+    //    std::cout << "Streaming text: " << request->TokenizerStream->Decode(token) << std::endl;
+
+    if (request->IsDone()) {
+      // Clean up the user data
+      delete reinterpret_cast<UserData*>(request->GetUserData());
+      // Remove the request from the engine
+      engine->Remove(*request);
+
+      if (!engine->HasPendingRequests()) {
+        // Notify the thread that all requests are done
+        std::unique_lock<std::mutex> lock(mutex);
+        cv.notify_one();
+      }
+    }
+  }
+
+  // Wait for the thread to finish
+  thread.join();
+
+#if 0
   while (!request_queue.empty()) {
     auto sequence = OgaSequences::Create();
     tokenizer->Encode(request_queue.front().c_str(), *sequence);
@@ -946,4 +997,5 @@ TEST(ContinuousBatching, API) {
       }
     }
   }
+#endif
 }

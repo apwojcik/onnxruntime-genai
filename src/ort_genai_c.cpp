@@ -7,6 +7,7 @@
 #include "span.h"
 #include "ort_genai_c.h"
 #include "generators.h"
+#include "engine.h"
 #include "models/model.h"
 #include "runtime_settings.h"
 #include "search.h"
@@ -43,6 +44,7 @@ struct OgaAbstract {
 struct OgaAdapters : Generators::Adapters, OgaAbstract {};
 struct OgaAudios : Generators::Audios, OgaAbstract {};
 struct OgaConfig : Generators::Config, OgaAbstract {};
+struct OgaEngine : Generators::Engine, OgaAbstract {};
 struct OgaGenerator : Generators::Generator, OgaAbstract {};
 struct OgaGeneratorParams : Generators::GeneratorParams, OgaAbstract {};
 struct OgaImages : Generators::Images, OgaAbstract {};
@@ -50,6 +52,7 @@ struct OgaModel : Generators::Model, OgaAbstract {};
 struct OgaMultiModalProcessor : Generators::MultiModalProcessor, OgaAbstract {};
 struct OgaNamedTensors : Generators::NamedTensors, OgaAbstract {};
 struct OgaResult : Generators::Result, OgaAbstract {};
+struct OgaRequest : Generators::Request, OgaAbstract {};
 struct OgaRuntimeSettings : Generators::RuntimeSettings, OgaAbstract {};
 struct OgaSequences : Generators::TokenSequences, OgaAbstract {};
 struct OgaStringArray : std::vector<std::string>, OgaAbstract {};
@@ -737,14 +740,14 @@ OgaResult* OGA_API_CALL OgaStringArrayGetCount(const OgaStringArray* string_arra
   OGA_CATCH
 }
 
-OgaResult* OgaStringArrayGetString(const OgaStringArray* string_array, size_t index, const char** out) {
+OgaResult* OGA_API_CALL OgaStringArrayGetString(const OgaStringArray* string_array, size_t index, const char** out) {
   OGA_TRY
   *out = string_array->at(index).c_str();
   return nullptr;
   OGA_CATCH
 }
 
-OgaResult* OgaCreateAdapters(const OgaModel* model, OgaAdapters** out) {
+OgaResult* OGA_API_CALL OgaCreateAdapters(const OgaModel* model, OgaAdapters** out) {
   OGA_TRY
   auto adapters = std::make_shared<Generators::Adapters>(model);
   *out = ReturnShared<OgaAdapters>(adapters);
@@ -752,23 +755,100 @@ OgaResult* OgaCreateAdapters(const OgaModel* model, OgaAdapters** out) {
   OGA_CATCH
 }
 
-OgaResult* OgaLoadAdapter(OgaAdapters* adapters, const char* adapter_file_path, const char* adapter_name) {
+OgaResult* OGA_API_CALL OgaLoadAdapter(OgaAdapters* adapters, const char* adapter_file_path, const char* adapter_name) {
   OGA_TRY
   adapters->LoadAdapter(adapter_file_path, adapter_name);
   return nullptr;
   OGA_CATCH
 }
 
-OgaResult* OgaUnloadAdapter(OgaAdapters* adapters, const char* adapter_name) {
+OgaResult* OGA_API_CALL OgaUnloadAdapter(OgaAdapters* adapters, const char* adapter_name) {
   OGA_TRY
   adapters->UnloadAdapter(adapter_name);
   return nullptr;
   OGA_CATCH
 }
 
-OgaResult* OgaSetActiveAdapter(OgaGenerator* generator, OgaAdapters* adapters, const char* adapter_name) {
+OgaResult* OGA_API_CALL OgaSetActiveAdapter(OgaGenerator* generator, OgaAdapters* adapters, const char* adapter_name) {
   OGA_TRY
   generator->state_->SetActiveAdapter(adapters, adapter_name);
+  return nullptr;
+  OGA_CATCH
+}
+
+OgaResult* OGA_API_CALL OgaCreateEngine(const OgaModel* model, OgaEngine** out) {
+  OGA_TRY
+  *out = ReturnUnique<OgaEngine>(std::make_unique<Generators::Engine>(*model));
+  return nullptr;
+  OGA_CATCH
+}
+
+OgaResult* OGA_API_CALL OgaEngineHasPendingRequests(const OgaEngine* engine, bool* out) {
+  OGA_TRY
+  *out = engine->HasPendingRequests();
+  return nullptr;
+  OGA_CATCH
+}
+
+OgaResult* OGA_API_CALL OgaEngineProcessRequests(OgaEngine* engine, OgaRequest** request) {
+  OGA_TRY
+  *request = static_cast<OgaRequest*>(engine->ProcessRequests());
+  return nullptr;
+  OGA_CATCH
+}
+
+OgaResult* OGA_API_CALL OgaEngineAddRequest(OgaEngine* engine, OgaRequest* request) {
+  OGA_TRY
+  engine->Add(*request);
+  return nullptr;
+  OGA_CATCH
+}
+
+OgaResult* OGA_API_CALL OgaEngineRemoveRequest(OgaEngine* engine, OgaRequest* request) {
+  OGA_TRY
+  engine->Remove(*request);
+  return nullptr;
+  OGA_CATCH
+}
+
+OgaResult* OGA_API_CALL OgaEngineShutdown(OgaEngine* engine) {
+  OGA_TRY
+  engine->Shutdown();
+  return nullptr;
+  OGA_CATCH
+}
+
+OgaResult* OGA_API_CALL OgaCreateRequest(OgaSequences* sequences, OgaGeneratorParams* params, OgaRequest** out) {
+  OGA_TRY
+  *out = ReturnUnique<OgaRequest>(std::make_unique<Generators::Request>(*sequences, *params));
+  return nullptr;
+  OGA_CATCH
+}
+
+OgaResult* OGA_API_CALL OgaRequestGetNextToken(OgaRequest* request, int32_t* token) {
+  OGA_TRY
+  *token = request->GetNextToken();
+  return nullptr;
+  OGA_CATCH
+}
+
+OgaResult* OGA_API_CALL OgaRequestIsDone(const OgaRequest* request, bool* out) {
+  OGA_TRY
+  *out = request->IsDone();
+  return nullptr;
+  OGA_CATCH
+}
+
+OgaResult* OGA_API_CALL OgaRequestSetUserData(OgaRequest* request, void* user_data) {
+  OGA_TRY
+  request->SetUserData(user_data);
+  return nullptr;
+  OGA_CATCH
+}
+
+OgaResult* OGA_API_CALL OgaRequestGetUserData(const OgaRequest* request, void** user_data) {
+  OGA_TRY
+  *user_data = request->GetUserData();
   return nullptr;
   OGA_CATCH
 }
@@ -790,5 +870,7 @@ void OGA_API_CALL OgaDestroyAudios(OgaAudios* p) { delete p; }
 void OGA_API_CALL OgaDestroyNamedTensors(OgaNamedTensors* p) { delete p; }
 void OGA_API_CALL OgaDestroyAdapters(OgaAdapters* p) { p->ExternalRelease(); }
 void OGA_API_CALL OgaDestroyRuntimeSettings(OgaRuntimeSettings* p) { delete p; }
+void OGA_API_CALL OgaDestroyRequest(OgaRequest* p) { p->ExternalRelease(); }
+void OGA_API_CALL OgaDestroyEngine(OgaEngine* p) { delete p; }
 
 }  // extern "C"
