@@ -79,6 +79,7 @@ def main(args):
             system_prompt = f"{args.system_prompt}"
         else:
             system_prompt = args.system_prompt
+    system_prompt = "You are a helpful AI agent with some tools, which are optional. <|tool_call|>[ {'name': 'get_weather', 'description': 'Get weather of a city.', 'parameters': {'city': {'description': 'The city for which weather information is requested', 'type': 'str', 'default': 'Dallas'}}}]<|/tool_call|>"
 
     # Keep asking for input prompts in a loop
     while True:
