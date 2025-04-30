@@ -2,6 +2,8 @@ import onnxruntime_genai as og
 import argparse
 import time
 
+og.set_log_options(enabled=True, model_input_values=True, model_output_values=True)
+
 def main(args):
     if args.verbose: print("Loading model...")
     if args.timings:
@@ -26,21 +28,22 @@ def main(args):
     # Set the max length to something sensible by default, unless it is specified by the user,
     # since otherwise it will be set to the entire context length
     if 'max_length' not in search_options:
-        search_options['max_length'] = 2048
+        search_options['max_length'] = 256
 
     chat_template = '<|user|>\n{input} <|end|>\n<|assistant|>'
 
     # Keep asking for input prompts in a loop
     while True:
-        text = input("Input: ")
-        if not text:
-            print("Error, input cannot be empty")
-            continue
+        # text = input("Input: ")
+        # if not text:
+        #     print("Error, input cannot be empty")
+        #     continue
 
         if args.timings: started_timestamp = time.time()
 
         # If there is a chat template, use it
-        prompt = f'{chat_template.format(input=text)}'
+        # prompt = f'{chat_template.format(input=text)}'
+        prompt = f"What is 2 + 3?"
 
         input_tokens = tokenizer.encode(prompt)
 
@@ -66,6 +69,8 @@ def main(args):
                     if first:
                         first_token_timestamp = time.time()
                         first = False
+
+                exit()
 
                 new_token = generator.get_next_tokens()[0]
                 print(tokenizer_stream.decode(new_token), end='', flush=True)
