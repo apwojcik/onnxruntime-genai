@@ -32,6 +32,9 @@ class GGUFAttention:
         self.o_proj = GGUFTensorModule()
         self.rotary_emb = GGUFTensorModule()
 
+        # For BitNet:
+        self.attn_sub_norm = GGUFTensorModule()
+
 
 class GGUFMLP:
     def __init__(self):
@@ -40,6 +43,9 @@ class GGUFMLP:
         self.down_proj = GGUFTensorModule()
         self.fc1 = GGUFTensorModule()
         self.fc2 = GGUFTensorModule()
+
+        # For BitNet:
+        self.ffn_sub_norm = GGUFTensorModule()
 
 
 class GGUFDecoderLayer:
@@ -56,7 +62,7 @@ class GGUFDecoderLayer:
 
 
 class GGUFModel:
-    def __init__(self, input_path, head_size, hidden_size, intermediate_size, num_attn_heads, num_kv_heads, vocab_size):
+    def __init__(self, input_path, head_size, hidden_size, intermediate_size, num_attn_heads, num_kv_heads, vocab_size, quantized=False):
         # Load GGUF model and read its info
         reader = GGUFReader(input_path)
 
@@ -105,28 +111,28 @@ class GGUFModel:
                 elif bool(re.match(r"^blk\.\d+\.attn_q\.weight$", name)):
                     # blk.layer_id.attn_q.weight
                     q_shape = [head_size * num_attn_heads, hidden_size]
-                    module.self_attn.q_proj.weight = data.reshape(q_shape)
+                    module.self_attn.q_proj.weight = data if quantized else data.reshape(q_shape)
                 elif bool(re.match(r"^blk\.\d+\.attn_q\.bias$", name)):
                     # blk.layer_id.attn_q.bias
                     module.self_attn.q_proj.bias = data
                 elif bool(re.match(r"^blk\.\d+\.attn_k\.weight$", name)):
                     # blk.layer_id.attn_k.weight
                     k_shape = [head_size * num_kv_heads, hidden_size]
-                    module.self_attn.k_proj.weight = data.reshape(k_shape)
+                    module.self_attn.k_proj.weight = data if quantized else data.reshape(k_shape)
                 elif bool(re.match(r"^blk\.\d+\.attn_k\.bias$", name)):
                     # blk.layer_id.attn_k.bias
                     module.self_attn.k_proj.bias = data
                 elif bool(re.match(r"^blk\.\d+\.attn_v\.weight$", name)):
                     # blk.layer_id.attn_v.weight
                     v_shape = [head_size * num_kv_heads, hidden_size]
-                    module.self_attn.v_proj.weight = data.reshape(v_shape)
+                    module.self_attn.v_proj.weight = data if quantized else data.reshape(v_shape)
                 elif bool(re.match(r"^blk\.\d+\.attn_v\.bias$", name)):
                     # blk.layer_id.attn_v.bias
                     module.self_attn.v_proj.bias = data
                 elif bool(re.match(r"^blk\.\d+\.attn_output\.weight$", name)):
                     # blk.layer_id.attn_output.weight
                     o_shape = [hidden_size, head_size * num_attn_heads]
-                    module.self_attn.o_proj.weight = data.reshape(o_shape)
+                    module.self_attn.o_proj.weight = data if quantized else data.reshape(o_shape)
                 elif bool(re.match(r"^blk\.\d+\.attn_output\.bias$", name)):
                     # blk.layer_id.attn_output.bias
                     module.self_attn.o_proj.bias = data
@@ -139,21 +145,21 @@ class GGUFModel:
                 elif bool(re.match(r"^blk\.\d+\.ffn_gate\.weight$", name)):
                     # blk.layer_id.ffn_gate.weight
                     gate_shape = [intermediate_size, hidden_size]
-                    module.mlp.gate_proj.weight = data.reshape(gate_shape)
+                    module.mlp.gate_proj.weight = data if quantized else data.reshape(gate_shape)
                 elif bool(re.match(r"^blk\.\d+\.ffn_gate\.bias$", name)):
                     # blk.layer_id.ffn_gate.bias
                     module.mlp.gate_proj.bias = data
                 elif bool(re.match(r"^blk\.\d+\.ffn_up\.weight$", name)) and data.shape[0] == intermediate_size:
                     # blk.layer_id.ffn_up.weight
                     up_shape = [intermediate_size, hidden_size]
-                    module.mlp.up_proj.weight = data.reshape(up_shape)
+                    module.mlp.up_proj.weight = data if quantized else data.reshape(up_shape)
                 elif bool(re.match(r"^blk\.\d+\.ffn_up\.bias$", name)) and data.shape[0] == intermediate_size:
                     # blk.layer_id.ffn_up.bias
                     module.mlp.up_proj.bias = data
                 elif bool(re.match(r"^blk\.\d+\.ffn_down\.weight$", name)):
                     # blk.layer_id.ffn_down.weight
                     down_shape = [hidden_size, intermediate_size]
-                    module.mlp.down_proj.weight = data.reshape(down_shape)
+                    module.mlp.down_proj.weight = data if quantized else data.reshape(down_shape)
                 elif bool(re.match(r"^blk\.\d+\.ffn_down\.bias$", name)):
                     # blk.layer_id.ffn_down.bias
                     module.mlp.down_proj.bias = data
@@ -163,7 +169,7 @@ class GGUFModel:
                     q_size = num_attn_heads * head_size
                     kv_size = num_kv_heads * head_size
                     qkv_shape = [q_size + kv_size + kv_size, hidden_size]
-                    qkv = data.reshape(qkv_shape)
+                    qkv = data if quantized else data.reshape(qkv_shape)
 
                     module.self_attn.q_proj.weight = qkv[: q_size, :]
                     module.self_attn.k_proj.weight = qkv[q_size : q_size + kv_size, :]
@@ -213,6 +219,10 @@ class GGUFModel:
 
                     # blk.layer_id.post_ffw_norm.bias
                     module.post_feedforward_layernorm.bias = data
+                elif bool(re.match(r"^blk\.\d+\.attn_sub_norm\.weight$", name)):
+                    module.self_attn.attn_sub_norm.weight = data
+                elif bool(re.match(r"^blk\.\d+\.ffn_sub_norm\.weight$", name)):
+                    module.mlp.ffn_sub_norm.weight = data
                 else:
                     raise NotImplementedError(f"{name} in your GGUF model is not recognized")
         
@@ -282,7 +292,10 @@ class GGUFModel:
         Also performs any pre-processing and post-processing to the GGUF models to ensure the
         weights are the same as the PyTorch models.
         """
-        if model_type == "ChatGLMModel":
+        if model_type == "BitNetForCausalLM":
+            input_path = input_path + "/ggml-model-i2_s.gguf"
+            model = GGUFModel(input_path, head_size, hidden_size, intermediate_size, num_attn_heads, num_kv_heads, vocab_size, quantized=True)
+        elif model_type == "ChatGLMModel":
             model = GGUFModel(input_path, head_size, hidden_size, intermediate_size, num_attn_heads, num_kv_heads, vocab_size)
         elif model_type == "GemmaForCausalLM":
             model = GGUFModel(input_path, head_size, hidden_size, intermediate_size, num_attn_heads, num_kv_heads, vocab_size)
