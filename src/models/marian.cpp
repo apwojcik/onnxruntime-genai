@@ -30,7 +30,6 @@ MarianState::MarianState(const MarianModel& model, DeviceSpan<int32_t> sequence_
 DeviceSpan<float> MarianState::Run(int current_length, DeviceSpan<int32_t>& next_tokens, DeviceSpan<int32_t> next_indices) {
   if(first_run_) {
     //INITIALIZE THE ENCODER AND RUN IT ONCE
-    std::cout<<"Inside Encoder run"<<std::endl;
 
     encoder_input_ids_.name_ = "input_ids";
     encoder_input_ids_.Add();
@@ -55,7 +54,6 @@ DeviceSpan<float> MarianState::Run(int current_length, DeviceSpan<int32_t>& next
     ClearIO();
 
     //INITIALIZE THE DECODER
-    std::cout<<"Inside Decoder run"<<std::endl;
     decoder_input_ids_.name_ = "input_ids";
     decoder_input_ids_.AddDecoderInputs(static_cast<int>(model_.config_->model.bos_token_id));
 
@@ -102,27 +100,14 @@ DeviceSpan<float> MarianState::Run(int current_length, DeviceSpan<int32_t>& next
 
     logits_.Add();
 
-    // new_length = static_cast<size_t>(decoder_input_ids_.GetShape()[1]);
     next_tokens.CpuSpan()[next_tokens.size() - 1] = 32000;
 
     logits_.Update(next_tokens.subspan(next_tokens.size() - 1, 1), 1);
-    for(int i=0;i<next_tokens.size();i++){
-      std::cout<<"Next tokens in first run = "<<next_tokens.CpuSpan()[i]<<" ";
-    }
-
-    auto& stream = Log("After running logits update");
-    stream << std::endl;
-    DumpTensors(model_, stream, outputs_.data(), output_names_.data(), output_names_.size(), true);
 
     State::Run(*model_.session_decoder_);
     first_run_ = false;
-    // auto& stream = Log("After returning model_output_values");
-    // stream << std::endl;
-    // DumpTensors(model_, stream, outputs_.data(), output_names_.data(), output_names_.size(), true);
     return logits_.Get();
   }
-
-    std::cout<<"Inside Decoder run"<<std::endl;
 
     // UPDATE THE DECODER
     decoder_input_ids_.Update(next_tokens);
