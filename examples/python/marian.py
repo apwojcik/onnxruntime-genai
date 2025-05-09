@@ -3,7 +3,7 @@ import argparse
 import numpy as np
 import time
 
-og.set_log_options(enabled=True, model_input_values=True, model_output_values=True)
+# og.set_log_options(enabled=True, model_input_values=True, model_output_values=True)
 
 def main(args):
     if args.verbose: print("Loading model...")
@@ -57,12 +57,11 @@ def main(args):
     while not generator.is_done():
         generator.generate_next_token()
         new_token = generator.get_next_tokens()[0]
-        print(generator.get_output("logits"))
+        # print(generator.get_output("logits"))
         all_output_ids.append(new_token)
     run_time = time.time() - start_time
 
     for i in range(len(prompts)):
-        print("Token IDs: ", all_output_ids)
         print(f'Prompt #{i}: {prompts[i]}')
         print()
         print(tokenizer.decode(generator.get_sequence(i)))

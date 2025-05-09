@@ -23,8 +23,6 @@ Logits::Logits(State& state)
 }
 
 DeviceSpan<float> Logits::Get() {
-  size_t element_count = shape_[0] * shape_[1];
-
   // The model's output logits are {batch_size*num_beams, vocab_size}
   // OrtValue* logits_of_last_token = output_raw_->GetOrtTensor();
   OrtValue* logits_of_last_token = state_.outputs_[state_.output_names_.size() - 1];

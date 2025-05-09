@@ -366,11 +366,11 @@ void Generator::ComputeLogits(DeviceSpan<int32_t> next_tokens) {
     throw std::runtime_error("ComputeLogits called again without calling AppendTokens or GenerateNextToken first");
 
   auto logits = state_->Run(search_->GetSequenceLength(), next_tokens, search_->GetNextIndices());
-  // if (g_log.enabled && g_log.model_logits) {
+  if (g_log.enabled && g_log.model_logits) {
     auto& stream = Log("model_logits");
     DumpValues(stream, Ort::TypeToTensorType<float>, logits.CopyDeviceToCpu().data(), logits.size());
     stream << std::endl;
-  // }
+  }
   SetLogits(logits);
   last_action_ = Action::standard;
   computed_logits_ = true;

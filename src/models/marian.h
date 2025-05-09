@@ -25,6 +25,7 @@ struct MarianState : State {
   DeviceSpan<float> Run(int current_length, DeviceSpan<int32_t>& next_tokens, DeviceSpan<int32_t> next_indices) override;
 
  private:
+  const MarianModel& model_;
   void UpdateInputsOutputs(DeviceSpan<int32_t>& next_tokens, DeviceSpan<int32_t> next_indices, int current_length, bool search_buffers);
 
   // Encoder IOs
@@ -43,8 +44,5 @@ struct MarianState : State {
   std::vector<std::unique_ptr<OrtValue>> values_;
   Logits logits_{*this};
   // std::unique_ptr<OrtValue> logits_;
-
-  const MarianModel& model_;
-
 };
 }  // namespace Generators
