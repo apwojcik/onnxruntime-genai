@@ -24,8 +24,8 @@ Logits::Logits(State& state)
 
 DeviceSpan<float> Logits::Get() {
   // The model's output logits are {batch_size*num_beams, vocab_size}
-  // OrtValue* logits_of_last_token = output_raw_->GetOrtTensor();
-  OrtValue* logits_of_last_token = state_.outputs_[state_.output_names_.size() - 1];
+   OrtValue* logits_of_last_token = output_raw_->GetOrtTensor();
+  //  logits_of_last_token = state_.outputs_[state_.output_names_.size() - 1];
   std::array<int64_t, 2> shape_last{shape_[0], shape_[1]};
 
   // Convert from float16 to float32 if necessary

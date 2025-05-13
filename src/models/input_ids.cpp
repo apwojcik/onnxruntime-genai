@@ -139,11 +139,11 @@ void DecoderInputIDs::Update(DeviceSpan<int32_t> new_tokens) {
   if (is_prompt_ && state_.params_->search.num_beams > 1)
     sequence_length = static_cast<size_t>(new_tokens.size()) / state_.params_->search.batch_size;
 
-  if (static_cast<size_t>(shape_[1]) != sequence_length) {
-    shape_[1] = sequence_length;
-    value_->CreateTensor(shape_, state_.params_->use_graph_capture && shape_[1] == 1);
-    state_.inputs_[input_index_] = value_->GetOrtTensor();
-  }
+  // if (static_cast<size_t>(shape_[1]) != sequence_length) {
+  //   shape_[1] = sequence_length;
+  //   value_->CreateTensor(shape_, state_.params_->use_graph_capture && shape_[1] == 1);
+  //   state_.inputs_[input_index_] = value_->GetOrtTensor();
+  // }
 
   // Update input_ids with next tokens
   auto data_span = value_->GetDeviceSpan<int32_t>();
@@ -152,10 +152,17 @@ void DecoderInputIDs::Update(DeviceSpan<int32_t> new_tokens) {
 
   data_span.CopyFrom(new_tokens);
 
-  if (!cast_value_->ort_tensor_)
-    cast_value_->CreateTensor(shape_, state_.params_->use_graph_capture);
-  Cast(*value_->GetOrtTensor(), cast_value_->ort_tensor_, *model_.p_device_inputs_, Ort::TypeToTensorType<int64_t>);
-  state_.inputs_[input_index_] = cast_value_->GetOrtTensor();
+  // if (type_ == Ort::TypeToTensorType<int64_t>) {
+  //   if (!cast_value_->ort_tensor_)
+  //     cast_value_->CreateTensor(shape_, state_.params_->use_graph_capture);
+  //   Cast(*value_->GetOrtTensor(), cast_value_->ort_tensor_, *model_.p_device_inputs_, type_);
+  //   state_.inputs_[input_index_] = cast_value_->GetOrtTensor();
+  // }
+
+  // if (!cast_value_->ort_tensor_)
+  //   cast_value_->CreateTensor(shape_, state_.params_->use_graph_capture);
+  // Cast(*value_->GetOrtTensor(), cast_value_->ort_tensor_, *model_.p_device_inputs_, Ort::TypeToTensorType<int64_t>);
+  // state_.inputs_[input_index_] = cast_value_->GetOrtTensor();
 
   is_prompt_ = false;
 }
