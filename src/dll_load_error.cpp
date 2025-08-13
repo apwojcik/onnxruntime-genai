@@ -7,7 +7,7 @@
 #include <memory>
 #include <string>
 #include <filesystem>
-#include "string.h"
+#include "wide_string.h"
 #pragma comment(lib, "dbghelp.lib")
 
 struct HMODULE_Deleter {

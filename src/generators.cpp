@@ -15,7 +15,7 @@
 #include "qnn/interface.h"
 #include "webgpu/interface.h"
 #include "openvino/interface.h"
-#include "string.h"
+#include "wide_string.h"
 
 #if defined(_WIN32)
 EXTERN_C IMAGE_DOS_HEADER __ImageBase;

@@ -101,6 +101,9 @@ else()
   add_library(onnxruntime-genai SHARED ${generator_srcs})
 endif()
 
+target_include_directories(onnxruntime-genai INTERFACE
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src> $<INSTALL_INTERFACE:include>)
+
 target_include_directories(onnxruntime-genai PRIVATE ${ORT_HEADER_DIR})
 target_include_directories(onnxruntime-genai PRIVATE ${onnxruntime_extensions_SOURCE_DIR}/shared/api)
 target_link_libraries(onnxruntime-genai PRIVATE onnxruntime_extensions)

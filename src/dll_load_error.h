@@ -3,6 +3,6 @@
 
 #pragma once
 
-#include "string.h"
+#include "wide_string.h"
 
 String DetermineLoadLibraryError(const std::filesystem::path&);
