@@ -6,6 +6,8 @@
 #include <dbghelp.h>
 #include <memory>
 #include <string>
+#include <filesystem>
+#include "string.h"
 #pragma comment(lib, "dbghelp.lib")
 
 struct HMODULE_Deleter {
@@ -15,43 +17,40 @@ struct HMODULE_Deleter {
 
 using ModulePtr = std::unique_ptr<HMODULE, HMODULE_Deleter>;
 
-std::string DetermineLoadLibraryError(const char* filename) {
-  std::string error("Error loading");
+String DetermineLoadLibraryError(const std::filesystem::path& filename) {
+  String error(__TEXT("Error loading"));
 
   ModulePtr hModule;  // Here so that filename is valid until the next iteration
-  while (filename) {
-    error += std::string(" \"") + filename + "\"";
+    error += __TEXT(" \"") + filename.to_native() + __TEXT("\"");
 
-    // We use DONT_RESOLVE_DLL_REFERENCES instead of LOAD_LIBRARY_AS_DATAFILE because the latter will not process the import table
-    // and will result in the IMAGE_IMPORT_DESCRIPTOR table names being uninitialized.
-    hModule = ModulePtr{LoadLibraryEx(filename, NULL, DONT_RESOLVE_DLL_REFERENCES)};
-    if (!hModule) {
-      error += " which is missing. (Error " + std::to_string(GetLastError()) + ')';
-      return error;
-    }
+  // We use DONT_RESOLVE_DLL_REFERENCES instead of LOAD_LIBRARY_AS_DATAFILE because the latter will not process the import table
+  // and will result in the IMAGE_IMPORT_DESCRIPTOR table names being uninitialized.
+  hModule = ModulePtr{LoadLibraryEx(filename.to_native().c_str(), nullptr, DONT_RESOLVE_DLL_REFERENCES)};
+  if (!hModule) {
+    error += __TEXT(" which is missing. (Error ") + ToString(GetLastError()) + __TEXT(')');
+    return error;
+  }
 
-    // Get the address of the Import Directory
-    ULONG size{};
-    IMAGE_IMPORT_DESCRIPTOR* import_desc = reinterpret_cast<IMAGE_IMPORT_DESCRIPTOR*>(ImageDirectoryEntryToData(hModule.get(), FALSE, IMAGE_DIRECTORY_ENTRY_IMPORT, &size));
-    if (!import_desc) {
-      error += " No import directory found.";  // This is unexpected, and I'm not sure how it could happen but we handle it just in case.
-      return error;
-    }
+  // Get the address of the Import Directory
+  ULONG size{};
+  const auto* import_desc = static_cast<IMAGE_IMPORT_DESCRIPTOR*>(ImageDirectoryEntryToData(hModule.get(), FALSE, IMAGE_DIRECTORY_ENTRY_IMPORT, &size));
+  if (!import_desc) {
+    error += __TEXT(" No import directory found.");  // This is unexpected, and I'm not sure how it could happen, but we handle it just in case.
+    return error;
+  }
 
-    // Iterate through the import descriptors to see which dependent DLL can't load
-    filename = nullptr;
-    for (; import_desc->Characteristics; import_desc++) {
-      char* dll_name = (char*)((BYTE*)(hModule.get()) + import_desc->Name);
-      // Try to load the dependent DLL, and if it fails, we loop again with this as the DLL and we'll be one step closer to the missing file.
-      ModulePtr hDepModule{LoadLibrary(dll_name)};
-      if (!hDepModule) {
-        filename = dll_name;
-        error += " which depends on";
-        break;
-      }
+  // Iterate through the import descriptors to see which dependent DLL can't load
+  for (; import_desc->Characteristics; import_desc++) {
+    auto* dll_name = reinterpret_cast<TCHAR*>(reinterpret_cast<BYTE*>(hModule.get()) + import_desc->Name);
+    // Try to load the dependent DLL, and if it fails, we loop again with this as the DLL and we'll be one step closer to the missing file.
+    ModulePtr hDepModule{LoadLibrary(dll_name)};
+    if (!hDepModule) {
+      error += __TEXT(" which depends on");
+      break;
     }
   }
-  error += " But no dependency issue could be determined.";
+
+  error += __TEXT(" But no dependency issue could be determined.");
   return error;
 }
 

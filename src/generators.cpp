@@ -15,6 +15,7 @@
 #include "qnn/interface.h"
 #include "webgpu/interface.h"
 #include "openvino/interface.h"
+#include "string.h"
 
 #if defined(_WIN32)
 EXTERN_C IMAGE_DOS_HEADER __ImageBase;
@@ -133,16 +134,16 @@ struct GenaiInterfaceImpl : GenaiInterface {
 
 #if defined(_WIN32)
 struct LibraryHandle {
-  LibraryHandle(const char* filename) {
-    auto path = CurrentModulePath() + filename;
-    handle_ = LoadLibrary(path.c_str());
+  explicit LibraryHandle(const std::filesystem::path& filename) {
+    auto path = CurrentModulePath() / filename;
+    handle_ = LoadLibrary(path.to_native().c_str());
     if (!handle_)
-      throw std::runtime_error(std::string("Failed to load library: ") + DetermineLoadLibraryError(filename));
+      throw std::runtime_error(WideToUTF8String(String{__TEXT("Failed to load library: ")} + DetermineLoadLibraryError(filename)));
   };
 
   ~LibraryHandle() { FreeLibrary(handle_); }
 
-  FARPROC __stdcall GetSymbol(const char* name) { return ::GetProcAddress(handle_, name); }
+  FARPROC __stdcall GetSymbol(const char* name) const { return ::GetProcAddress(handle_, name); }
 
   operator HANDLE() { return handle_; }
 
@@ -251,7 +252,7 @@ GeneratorParams::GeneratorParams(const Config& config)
 }
 
 GeneratorParams::GeneratorParams(const Model& model)
-    : config{*model.config_.get()},
+    : config{*model.config_},
       use_graph_capture{IsGraphCaptureEnabled(model.config_->model.decoder.session_options)},
       use_multi_profile{IsMultiProfileEnabled(model.config_->model.decoder.session_options)},
       p_device{model.p_device_inputs_} {
@@ -290,7 +291,7 @@ Generator::Generator(const Model& model, const GeneratorParams& params) : model_
   guidance_logits_processor_ = CreateGuidanceLogitsProcessor(*state_);  // Could be nullptr if use_guidance (constrained decoding) is not used
 }
 
-DeviceSpan<int32_t> Generator::AllocateInputIdsOnDevice(cpu_span<const int32_t> input_ids) {
+DeviceSpan<int32_t> Generator::AllocateInputIdsOnDevice(cpu_span<const int32_t> input_ids) const {
   size_t padded_input_ids_size = input_ids.size();
   if (model_->config_->model.decoder.sliding_window.has_value()) {
     // If the model has a sliding window, pad the input_ids to the next multiple of the window size

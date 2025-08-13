@@ -4,7 +4,7 @@
 
 #include <algorithm>
 #include <array>
-#include <assert.h>
+#include <cassert>
 #include <atomic>
 #include <cmath>
 #include <cstring>
@@ -68,8 +68,8 @@ std::string to_string(DeviceType device_type);
 DeviceInterface* GetDeviceInterface(DeviceType type);
 
 struct GeneratorParams : std::enable_shared_from_this<GeneratorParams>, LeakChecked<GeneratorParams>, ExternalRefCounted<GeneratorParams> {
-  GeneratorParams(const Config& config);  // This constructor is only used for internal generator benchmarks
-  GeneratorParams(const Model& model);
+  explicit GeneratorParams(const Config& config);  // This constructor is only used for internal generator benchmarks
+  explicit GeneratorParams(const Model& model);
 
   const Config& config;                  // The model outlives the GeneratorParams
   Config::Search search{config.search};  // Copy of the search parameters from the config
@@ -113,7 +113,7 @@ struct Generator : LeakChecked<Generator> {
   bool set_extra_inputs_{true};  // Set to false once SetExtraInputs() is called once
 
  private:
-  DeviceSpan<int32_t> AllocateInputIdsOnDevice(cpu_span<const int32_t> input_ids);
+  DeviceSpan<int32_t> AllocateInputIdsOnDevice(cpu_span<const int32_t> input_ids) const;
   void ComputeLogits(DeviceSpan<int32_t> next_tokens);
   enum Action { standard,   // Default, set in any other case
                 generated,  // Set after GenerateNextToken
@@ -132,7 +132,6 @@ struct OrtGlobals {
   };
   Allocator device_allocators_[static_cast<int>(DeviceType::MAX)];
 
- private:
   OrtGlobals(const OrtGlobals&) = delete;
   void operator=(const OrtGlobals&) = delete;
 };

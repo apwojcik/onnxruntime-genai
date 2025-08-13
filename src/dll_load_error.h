@@ -1,3 +1,8 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
-std::string DetermineLoadLibraryError(const char* filename);
+
+#pragma once
+
+#include "string.h"
+
+String DetermineLoadLibraryError(const std::filesystem::path&);

@@ -104,7 +104,7 @@ struct InterfaceImpl : DeviceInterface {
 
     dml_objects_ = DmlHelpers::CreateDmlObjects(CurrentModulePath(), p_device_luid, p_device_index);
 
-    constexpr auto directml_dll = "DirectML.dll";
+    constexpr auto directml_dll = __TEXT("DirectML.dll");
     smart_directml_dll_ = wil::unique_hmodule{LoadLibraryEx(directml_dll, nullptr, 0)};
     if (!smart_directml_dll_)
       throw std::runtime_error("DirectML.dll not found");

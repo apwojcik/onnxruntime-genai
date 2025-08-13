@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 struct GenaiInterface {
+  virtual ~GenaiInterface() = default;
 #if _WIN32
   virtual void* HeapAllocate(size_t size) = 0;
   virtual void HeapFree(void*) = 0;

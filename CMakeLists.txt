@@ -11,6 +11,8 @@ include(FetchContent)
 include(CMakeDependentOption)
 project(Generators LANGUAGES C CXX)
 
+add_compile_definitions($<$<COMPILE_LANGUAGE:C,CXX>:_SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING>)
+
 # All Options should be defined in cmake/options.cmake This must be included before any other cmake file is included
 include(cmake/options.cmake)
 

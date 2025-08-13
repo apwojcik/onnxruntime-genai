@@ -10,7 +10,7 @@ using Microsoft::WRL::ComPtr;
 namespace AdapterSelection {
 HRESULT CreateDXCoreFactory(_Out_ ComPtrAndDll<IDXCoreAdapterFactory>& factory_and_dll) {
   // Failure is expected when running on older versions of Windows that don't have DXCore.dll.
-  wil::unique_hmodule dxcore_dll(LoadLibrary("DXCore.dll"));
+  wil::unique_hmodule dxcore_dll(LoadLibrary(__TEXT("DXCore.dll")));
   RETURN_LAST_ERROR_IF_NULL_EXPECTED(dxcore_dll);
 
   // All versions of DXCore have this symbol (failure is unexpected).
@@ -37,7 +37,7 @@ ComPtrAndDll<IDXCoreAdapterFactory> TryCreateDXCoreFactory() {
 }
 
 HRESULT CreateDXGIFactory(_Out_ ComPtrAndDll<IDXGIFactory4>& factory_and_dll) {
-  wil::unique_hmodule dxgi_dll(LoadLibrary("dxgi.dll"));
+  wil::unique_hmodule dxgi_dll(LoadLibrary(__TEXT("dxgi.dll")));
   RETURN_LAST_ERROR_IF_NULL(dxgi_dll);
 
   auto create_dxgi_factory = reinterpret_cast<decltype(&::CreateDXGIFactory)>(
