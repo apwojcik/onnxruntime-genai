@@ -9,15 +9,25 @@ if(ORT_HOME)
     # Paths are based on the directory structure of the ORT Android AAR.
     set(ORT_HEADER_DIR ${ORT_HOME}/headers)
     set(ORT_LIB_DIR ${ORT_HOME}/jni/${ANDROID_ABI})
+    set(ORT_BIN_DIR ${ORT_LIB_DIR})
   elseif (IOS OR MAC_CATALYST)
     set(ORT_HEADER_DIR ${ORT_HOME}/Headers)
     set(ORT_LIB_DIR ${ORT_HOME}/)
+    set(ORT_BIN_DIR ${ORT_LIB_DIR})
   elseif (CMAKE_SYSTEM_NAME MATCHES "AIX")
     set(ORT_HEADER_DIR ${ORT_HOME}/include/onnxruntime)
+    set(ORT_BIN_DIR ${ORT_HOME}/bin)
     set(ORT_LIB_DIR ${ORT_HOME}/lib)
   else()
-    set(ORT_HEADER_DIR ${ORT_HOME}/include)
-    set(ORT_LIB_DIR ${ORT_HOME}/lib)
+    find_file(_onnxruntime_c_api_h onnxruntime_c_api.h REQUIRED
+            HINTS "${ORT_HOME}" PATH_SUFFIXES include include/onnxruntime)
+    cmake_path(GET _onnxruntime_c_api_h PARENT_PATH ORT_HEADER_DIR)
+    find_file(_onnxruntime_dll onnxruntime.dll REQUIRED
+            HINTS "${ORT_HOME}" PATH_SUFFIXES bin lib)
+    cmake_path(GET _onnxruntime_dll PARENT_PATH ORT_BIN_DIR)
+    find_file(_onnxruntime_lib onnxruntime.lib REQUIRED
+            HINTS "${ORT_HOME}" PATH_SUFFIXES lib)
+    cmake_path(GET _onnxruntime_lib PARENT_PATH ORT_LIB_DIR)
   endif()
 else()
   # If ORT_HOME is not specified, download the onnxruntime headers and libraries from the nightly feed
@@ -94,6 +104,7 @@ else()
       message(FATAL_ERROR "Auto download ONNX Runtime for this platform is not supported.")
     endif()
   endif()
+  set(ORT_BIN_DIR ${ORT_LIB_DIR})
 endif()
 
 # Download DML headers and libraries
@@ -141,3 +152,4 @@ set(ONNXRUNTIME_LIB_DIR ${ORT_LIB_DIR})
 
 message(STATUS "ORT_HEADER_DIR: ${ORT_HEADER_DIR}")
 message(STATUS "ORT_LIB_DIR: ${ORT_LIB_DIR}")
+message(STATUS "ORT_BIN_DIR: ${ORT_BIN_DIR}")
