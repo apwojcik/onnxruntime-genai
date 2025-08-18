@@ -7,6 +7,14 @@
 #include <string_view>
 #include <codecvt>
 
+#ifndef TCHAR
+#if defined(_UNICODE) || defined(UNICODE)
+#define TCHAR   wchar_t
+#else
+#define TCHAR   char
+#endif
+#endif
+
 #if defined(UNICODE) || defined(_UNICODE)
 using String = std::wstring;
 #define ToString std::to_wstring
