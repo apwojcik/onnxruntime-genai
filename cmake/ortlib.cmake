@@ -6,8 +6,6 @@ include_guard()
 if(USE_WINML)
   message(STATUS "----- Building with WinML support ----- ")
 
-  add_compile_definitions(USE_WINML=1)
-
   if(NOT DEFINED WINML_SDK_VERSION OR WINML_SDK_VERSION STREQUAL "")
     #set(WINML_SDK_VERSION "1.8.1065-experimental")
     # message(STATUS "WINML_SDK_VERSION not set, defaulting to ${WINML_SDK_VERSION}")
@@ -55,8 +53,6 @@ if(USE_WINML)
   file(COPY ${ORT_LIBS_1} DESTINATION "${ORT_HOME}/lib")
 
   message(STATUS "USE_WINML: ORT_HOME set to: ${ORT_HOME}")
-else()
-  add_compile_definitions(USE_WINML=0)
 endif()
 
 function(_get_target_location_property variable target property)
@@ -77,6 +73,11 @@ function(_get_target_location_property variable target property)
   set(${variable} ${_result} PARENT_SCOPE)
 endfunction()
 
+if(USE_PLUGIN_API OR USE_WINML)
+  add_compile_definitions(USE_WINML=1)
+else()
+  add_compile_definitions(USE_WINML=0)
+endif()
 
 if(ORT_HOME)
   # If ORT_HOME is specified at build time, use ORT_HOME to get the onnxruntime headers and libraries
@@ -86,7 +87,7 @@ if(ORT_HOME)
   get_filename_component(ORT_HOME ${ORT_HOME} ABSOLUTE)
   message(STATUS "Using ONNX Runtime from: ${ORT_HOME} [absloute]")
 
-  if (ANDROID)
+  if(ANDROID)
     # Paths are based on the directory structure of the ORT Android AAR.
     set(ORT_HEADER_DIR ${ORT_HOME}/headers)
     set(ORT_LIB_DIR ${ORT_HOME}/jni/${ANDROID_ABI})
