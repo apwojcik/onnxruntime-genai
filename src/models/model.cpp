@@ -568,13 +568,13 @@ DeviceInterface* SetProviderSessionOptions(OrtSessionOptions& session_options,
     // Providers specified in a non-primary provider options list are added
     // to the primary providers. They are considered immutable and implicitly
     // added as providers.
-    std::transform(provider_options_list.begin(), provider_options_list.end(), std::back_inserter(providers_list),
+    std::ranges::transform(provider_options_list, std::back_inserter(providers_list),
                    [](const auto& provider_options) { return provider_options.name; });
   }
 
   for (auto& provider : providers_list) {
-    auto provider_options_it = std::find_if(provider_options_list.begin(), provider_options_list.end(),
-                                            [&provider](const Config::ProviderOptions& po) { return po.name == provider; });
+    auto provider_options_it = std::ranges::find_if(provider_options_list,
+      [&provider](const Config::ProviderOptions& po) { return po.name == provider; });
 
     if (provider_options_it == provider_options_list.end()) {
       throw std::runtime_error("Provider options not found for provider: " + provider);
@@ -760,6 +760,7 @@ DeviceInterface* SetProviderSessionOptions(OrtSessionOptions& session_options,
           {"WebGPU", "WebGpuExecutionProvider"},
           {"VitisAI", "VitisAIExecutionProvider"},
           {"NvTensorRtRtx", "NvTensorRTRTXExecutionProvider"},
+          {"MIGraphX", "MIGraphXExecutionProvider"}
       };
       std::string ep_name{};
       if (auto search = s_providerNameToExecutionProvider.find(provider_options.name); search != s_providerNameToExecutionProvider.end()) {
@@ -800,23 +801,25 @@ DeviceInterface* SetProviderSessionOptions(OrtSessionOptions& session_options,
       // No need to append if we can't find a device.
       if (!ep_devices_ptrs.empty()) {
         std::vector<const char*> keys, values;
-        for (auto& option : provider_options.options) {
+        for (const auto& [key, value] : provider_options.options) {
           // WinML Hotfix: remove backend_type and backend_path from QNN provider options
           static const std::set<std::string> qnn_options_to_remove{"backend_type", "backend_path"};
           if (provider_options.name == "QNN" &&
-              qnn_options_to_remove.find(option.first) != qnn_options_to_remove.end()) {
+              qnn_options_to_remove.contains(key)) {
             continue;
           }
 
-          keys.emplace_back(option.first.c_str());
-          values.emplace_back(option.second.c_str());
+          keys.emplace_back(key.c_str());
+          values.emplace_back(value.c_str());
         }
 
-        Ort::api->SessionOptionsAppendExecutionProvider_V2(
+        Ort::ThrowOnError(
+          Ort::api->SessionOptionsAppendExecutionProvider_V2(
             &session_options,
             &GetOrtEnv(),
             ep_devices_ptrs.data(), ep_devices_ptrs.size(),
-            keys.data(), values.data(), keys.size());
+            keys.data(), values.data(), keys.size())
+        );
       } else if (provider_options.name == "NvTensorRtRtx") {
         // Fallback to legacy API for built-in NvTensorRtRtx when no pre-registered device found
         // This handles the case when using the built-in provider (not loaded as a plugin)
@@ -825,7 +828,7 @@ DeviceInterface* SetProviderSessionOptions(OrtSessionOptions& session_options,
           keys.emplace_back(option.first.c_str());
           values.emplace_back(option.second.c_str());
         }
-        session_options.AppendExecutionProvider(provider_options.name.c_str(), keys.data(), values.data(), keys.size());
+        session_options.AppendExecutionProvider(provider_options.name, keys.data(), values.data(), keys.size());
       }
 #else
       std::vector<const char*> keys, values;
