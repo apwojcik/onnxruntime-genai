@@ -481,7 +481,7 @@ void EnsureDeviceOrtInit(DeviceInterface& device, const Config& config) {
   // This ensures memory allocated on-device for model inputs/outputs is valid for the lifetime of GenAI.
 
   // Names for the device types used by 'SetProviderSessionOptions'
-  static const char* device_type_names[] = {"CPU (Not used, see above)", "cuda", "DML", "WebGPU", "QNN", "OpenVINO (Not used, see above)", "NvTensorRtRtx", "RyzenAI"};
+  static const char* device_type_names[] = {"CPU (Not used, see above)", "cuda", "DML", "WebGPU", "QNN", "OpenVINO (Not used, see above)", "NvTensorRtRtx", "RyzenAI", "MIGraphX"};
   static_assert(std::size(device_type_names) == static_cast<size_t>(DeviceType::MAX));
 
   // Create an OrtSessionOptions and set the options to use the DeviceType we're using here
@@ -500,7 +500,14 @@ void EnsureDeviceOrtInit(DeviceInterface& device, const Config& config) {
   allocator.session_ = OrtSession::Create(GetOrtEnv(), g_trivial_model, sizeof(g_trivial_model), session_options.get());
 
   // Names for the device memory types used by 'OrtMemoryInfo::Create'
-  static const char* device_memory_type_names[] = {"CPU (Not used, see above)", "Cuda", "DML", "WebGPU_Buf", "QnnHtpShared", "OpenVINO (Not used, see above)", "Cuda", "Cpu"};
+  // Note: MIGraphX's OrtMemoryInfo memory-type name is "Hip" for the plugin EP path —
+  // confirmed against onnxruntime-execution-providers/src/migraphx/mgx_factory.cc:36 which
+  // registers `CreateMemoryInfo_V2("Hip", OrtMemoryInfoDeviceType_GPU, 0x1002, ...)`.
+  // (A pinned-memory allocator is registered separately at :39 under "HipPinned" — not used here.)
+  // Earlier guess of "Cuda" was a misread of the legacy in-tree EP and produced
+  // RuntimeError: Failed to create allocator for Cuda: No requested allocator available
+  // at runtime — fixed 2026-05-21.
+  static const char* device_memory_type_names[] = {"CPU (Not used, see above)", "Cuda", "DML", "WebGPU_Buf", "QnnHtpShared", "OpenVINO (Not used, see above)", "Cuda", "Cpu", "Hip"};
   static_assert(std::size(device_memory_type_names) == static_cast<size_t>(DeviceType::MAX));
 
   // Get the allocator from the OrtSession for the DeviceType (it's called 'AllocatorCreate' but it's really 'AllocatorGet')
