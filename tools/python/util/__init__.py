@@ -5,7 +5,7 @@ from . import android
 from .android import create_virtual_device, get_sdk_tool_paths, start_emulator, stop_emulator
 from .dependency_resolver import copy_dependencies, download_dependencies
 from .logger import get_logger
-from .platform_helpers import is_aix, is_linux, is_mac, is_windows, is_windows_arm
+from .platform_helpers import is_aix, is_linux, is_linux_arm, is_mac, is_windows, is_windows_arm
 from .run import run
 
 __all__ = [

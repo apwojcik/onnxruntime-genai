@@ -8,10 +8,14 @@ else()
   cmake_minimum_required(VERSION 3.26)
 endif()
 
+include(cmake/version.cmake)
+
+project(Generators VERSION ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH} LANGUAGES C CXX)
+
+include(GNUInstallDirs)
 include(FetchContent)
 include(CMakeDependentOption)
 
-project(Generators LANGUAGES C CXX)
 
 # All Options should be defined in cmake/options.cmake This must be included before any other cmake file is included
 include(cmake/options.cmake)
@@ -38,7 +42,6 @@ if(MSVC)
 endif()
 
 include(cmake/ortlib.cmake)
-
 
 include(cmake/external/onnxruntime_external_deps.cmake)
 # All Global variables, including GLOB, for the top level CMakeLists.txt should be defined here
@@ -122,12 +125,16 @@ else()
     add_library(onnxruntime-genai SHARED "${GENERATORS_ROOT}/dll/onnxruntime-genai.rc")
   else()
     add_library(onnxruntime-genai SHARED)
+    set_target_properties(onnxruntime-genai PROPERTIES VERSION ${PROJECT_VERSION} SOVERSION ${PROJECT_VERSION_MAJOR})
   endif()
 
   # Bring in the object library's compiled objects and usage requirements without re-exporting
   # GenAI's private dependencies to DLL consumers.
   target_link_libraries(onnxruntime-genai PRIVATE onnxruntime-genai-obj)
 endif()
+
+target_include_directories(onnxruntime-genai INTERFACE
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src> $<INSTALL_INTERFACE:include>)
 
 target_include_directories(${ORTGENAI_COMPILE_TARGET} ${ORTGENAI_USAGE_SCOPE} ${ORT_HEADER_DIR})
 target_include_directories(${ORTGENAI_COMPILE_TARGET} ${ORTGENAI_USAGE_SCOPE} ${onnxruntime_extensions_SOURCE_DIR}/shared/api)
@@ -137,9 +144,9 @@ target_link_libraries(${ORTGENAI_COMPILE_TARGET} ${ORTGENAI_USAGE_SCOPE} Threads
 
 if(WIN32)
   target_compile_definitions(onnxruntime-genai PRIVATE VERSION_INFO=\"${VERSION_INFO}\")
-  target_compile_definitions(onnxruntime-genai PRIVATE VERSION_MAJOR=${VERSION_MAJOR})
-  target_compile_definitions(onnxruntime-genai PRIVATE VERSION_MINOR=${VERSION_MINOR})
-  target_compile_definitions(onnxruntime-genai PRIVATE VERSION_PATCH=${VERSION_PATCH})
+  target_compile_definitions(onnxruntime-genai PRIVATE VERSION_MAJOR=${PROJECT_VERSION_MAJOR})
+  target_compile_definitions(onnxruntime-genai PRIVATE VERSION_MINOR=${PROJECT_VERSION_MINOR})
+  target_compile_definitions(onnxruntime-genai PRIVATE VERSION_PATCH=${PROJECT_VERSION_PATCH})
   target_compile_definitions(onnxruntime-genai PRIVATE VERSION_SUFFIX=${VERSION_SUFFIX})
   target_compile_definitions(onnxruntime-genai PRIVATE FILE_NAME=\"onnxruntime-genai.dll\")
 endif()
@@ -202,7 +209,16 @@ else()
 endif()
 
 # The genai library itself is always embedded in the shared library
-list(APPEND ortgenai_embed_libs "$<TARGET_FILE:onnxruntime-genai>")
+if(WIN32 OR ANDROID OR IOS)
+  list(APPEND ortgenai_embed_libs "$<TARGET_FILE:onnxruntime-genai>")
+else()
+  if (ENABLE_PYTHON)
+    list(APPEND python_embed_libs "$<TARGET_SONAME_FILE:onnxruntime-genai>")
+  endif()
+  if (ENABLE_JAVA)
+    list(APPEND java_embed_libs "$<TARGET_LINKER_FILE:onnxruntime-genai>")
+  endif()
+endif()
 
 # we keep the shared libraries disconnected on Android as they will come from separate AARs and we don't want to force
 # the ORT version to match in both.
@@ -218,7 +234,6 @@ endif()
 if(APPLE)
 target_link_libraries(${ORTGENAI_COMPILE_TARGET} ${ORTGENAI_USAGE_SCOPE} "-framework Foundation" "-framework CoreML")
 endif()
-
 
 # Build all source files using CUDA as a separate shared library we dynamically load at runtime
 if((USE_CUDA OR USE_TRT_RTX) AND CMAKE_CUDA_COMPILER)
@@ -269,7 +284,6 @@ if((USE_CUDA OR USE_TRT_RTX) AND CMAKE_CUDA_COMPILER)
     message(FATAL_ERROR "${target} unknown platform, need to specify shared library exports for it")
   endif()
 endif()
-
 
 if(USE_GUIDANCE)
   target_include_directories(${ORTGENAI_COMPILE_TARGET} ${ORTGENAI_USAGE_SCOPE} $<BUILD_INTERFACE:${llguidance_SOURCE_DIR}/parser/>)
