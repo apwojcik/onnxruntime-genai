@@ -8,13 +8,14 @@
 *obj/
 src/csharp/AssemblyInfo.cs
 /ort
-/build
 /build_*
+build*/
 /test/models/*
 /cache_models
 /onnxruntime-linux-x64-*
 *.csv
 .idea
+.venv
 cache_dir
 example-models
 *.onnx
