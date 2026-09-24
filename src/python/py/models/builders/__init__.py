@@ -18,6 +18,7 @@ from .lfm2 import LFM2AudioModel, LFM2Model, LFM2MoEModel
 from .llama import LlamaModel
 from .mistral import Mistral3TextModel, MistralModel
 from .mtp import MTPModel
+from .muse_glimmer import MuseGlimmerModel
 from .nemotron import NemotronModel
 from .olmo import OLMoModel
 from .phi import (
@@ -65,6 +66,7 @@ __all__ = [
     "Mistral3TextModel",
     "MistralModel",
     "Model",
+    "MuseGlimmerModel",
     "NemotronModel",
     "OLMoModel",
     "Phi3MiniLongRoPEModel",
